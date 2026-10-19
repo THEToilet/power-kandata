@@ -71,6 +71,11 @@ const GOAL := 1000.0          # 極楽（ここに着いたらクリア）
 const DIFF_RAMP := 1000.0     # この高さまでで、難しさが最大になる（m）
 const GEN_AHEAD := 200.0      # カンダタの何 m 上までコースを作っておくか
 const DURABILITY_MAX := 100.0
+const VIEW_XS := 0.7          # 画面の横の縮尺（px/モデルpx）。叫びの衝撃波を画面上で円にするため
+const VIEW_PPM := 3.5         # 画面の縦の縮尺（px/m）
+const BLAST_BASE := 60.0      # 叫びの衝撃波の半径（画面px）。踏み台1人ごとに +BLAST_PER
+const BLAST_PER := 14.0
+const BLAST_MAX := 150.0
 const FIRE_ORBIT := 110.0      # 鬼火の円の半径（px、固定）
 const FIRE_LANES := [-140.0, 0.0, 140.0]   # 鬼火の円の中心: 左・中央・右
 const SINNER_TRIGGER := 8.0   # 崖の罪人が飛びかかってくる距離（m 手前）
@@ -88,7 +93,7 @@ const GHOST_JITTER := 14.0    # 罪人が勝手に揺らす力
 const BODY_W := 14.0          # カンダタの半幅（px）
 const HEAD := 2.0             # 頭の高さ（m）
 const ROCK_R := 22.0          # 落石の半径（px）
-const ONI_WINDUP := 0.8       # 鬼が岩を振りかぶっている時間（秒）。この間に軌道が見える
+const ONI_WINDUP := 1.4       # 鬼が岩を振りかぶっている時間（秒）。この間に軌道が見える
 const ONI_X := X_LIMIT + 40.0 # 鬼の手の位置（崖の上、px）
 const ONI_ABOVE := 8.0        # 鬼の手は狙う高さの何 m 上か
 const ROCK_VUP := 5.0         # 投げ上げる速さ（m/秒）
@@ -138,6 +143,9 @@ var best_jump := 0.0
 var last_jump := 0.0
 var last_stones := 0          # 直前の叫びで踏み台にした人数
 var total_stones := 0         # 踏み台にした合計
+var last_blast: Array = []    # 直前の叫びで消し飛ばした障害 [{"type","x","h"}]
+var blast_r := 0.0            # 直前の叫びの衝撃波の半径（画面px）
+var blasted := 0              # 叫びで消した障害の合計
 var last_clutch := false      # 直前の叫びが九死に一生だったか
 var clutches := 0             # 九死に一生の回数
 var thread_end := -30.0       # 手元から下へ垂れている糸の下端（m）。叫んで切ると、つかみ直した所が下端になる
@@ -320,6 +328,7 @@ func step(delta: float, want_climb: bool, want_shout: bool, swing: float, want_d
 		air_from = height
 		air_to = height + j
 		thread_end = air_to
+		_blast(stepping_stones(), is_clutch())
 		air_left = AIR_TIME
 		ghosts = 0.0
 		gauge = 0.0
@@ -343,6 +352,34 @@ func step(delta: float, want_climb: bool, want_shout: bool, swing: float, want_d
 		height = GOAL
 		state = State.WON
 	_update_window()
+
+
+func _blast(stones: int, clutch: bool) -> void:
+	# 叫びの衝撃波: カンダタのまわりの円の中にある岩（振りかぶり中の鬼の岩も）と鬼火を消し飛ばす
+	blast_r = minf(BLAST_BASE + BLAST_PER * stones, BLAST_MAX) * (1.3 if clutch else 1.0)
+	last_blast.clear()
+	var keep_f: Array = []
+	for o in obstacles:
+		var fp := fire_pos(o)
+		if _in_blast(fp.x, fp.y):
+			last_blast.append({"type": "fire", "x": fp.x, "h": fp.y})
+		else:
+			keep_f.append(o)
+	obstacles = keep_f
+	var keep_r: Array = []
+	for r in rocks:
+		if not r.hit_player and _in_blast(r.x, r.h):
+			last_blast.append({"type": "rock", "x": r.x, "h": r.h})
+		else:
+			keep_r.append(r)
+	rocks = keep_r
+	blasted += last_blast.size()
+
+
+func _in_blast(px: float, ph: float) -> bool:
+	var dx := (px - x) * VIEW_XS
+	var dy := (ph - height) * VIEW_PPM
+	return dx * dx + dy * dy < blast_r * blast_r
 
 
 func _update_window() -> void:

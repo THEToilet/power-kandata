@@ -13,7 +13,7 @@ const PPM := 3.5             # 1m あたりのドット
 const XS := 0.7              # モデルの横位置（px@1280）→ 画面ドット
 const GHOST_GAP := 12.0
 const MAP_X := 625.0         # 高度マップ（縦の再生バー）
-const MAP_TOP := 30.0
+const MAP_TOP := 34.0
 const MAP_BOT := 330.0
 const PANEL_X := 640.0
 const TUNING_PATH := "user://tuning_v2.json"   # 標準から変えた値だけ保存する
@@ -316,7 +316,11 @@ var falling_ghosts: Array = []   # [pos, vel, rot]
 var falling_thread: Array = []   # [world_h, x, age]
 var popups: Array = []           # [text, world_h, x, age, color]
 var fx_shout := 0.0
-var stomp_fx := 0.0              # 踏みつけの衝撃波
+var stomp_fx := 0.0              # 叫びの衝撃波（残り時間）
+const BLAST_TIME := 0.5
+var blast_at := Vector2.ZERO     # 衝撃波の中心（x: モデルpx, y: 高さ m）
+var blast_px := 0.0              # 衝撃波の半径（画面px）
+const C_SILK := Color8(226, 224, 236)   # 蜘蛛の糸の色
 var ring_nope := 0.0
 var anim_h := 0.0                # 登りモーション用: 前のフレームの高さ
 var climb_phase := 0.0           # 登った距離で進むモーションの位相
@@ -719,7 +723,13 @@ func _on_shout(n_ghosts: int, from_x: float) -> void:
 	var sp := Vector2(_sx(from_x), _sy(model.air_from))
 	var big := clampi(model.last_stones, 1, 6)
 	_burst(sp, 20 + big * 10, [C_YELLOW, C_WHITE, C_ORANGE], 90.0 + big * 20.0, 2.0, 0.7, 0.0)   # 叫びの火花
-	_burst(sp + Vector2(0, 20), 16, [Color(C_GREY, 0.7), Color(C_CLIFF_L, 0.7)], 70.0, 3.0, 0.6, 80.0)   # 踏みつけの土煙
+	# 衝撃波で消し飛んだ岩と鬼火
+	for b in model.last_blast:
+		var bp := Vector2(_sx(b.x), _sy(b.h))
+		if b.type == "fire":
+			_burst(bp, 24, [C_YELLOW, C_ORANGE, C_WHITE], 120.0, 2.0, 0.6, -30.0)
+		else:
+			_burst(bp, 20, [C_ROCK, C_ROCK_L, C_ROCK_D], 150.0, 3.0, 0.7, 250.0)
 	fx_shout = 0.9
 	shout_text = SHOUT_LINES[randi() % SHOUT_LINES.size()]
 	shake = minf(1.4, 0.5 + 0.12 * model.last_stones)   # 大勢を踏み台にするほど揺れる
@@ -731,7 +741,9 @@ func _on_shout(n_ghosts: int, from_x: float) -> void:
 		popups.append(["九死に一生！", model.air_from + 16.0, from_x - 80.0, 0.0, C_GOLD])
 	falling_thread.append([model.air_from, from_x, 0.0])
 	_drop_ghosts(n_ghosts, model.air_from, from_x, true)
-	stomp_fx = 0.5
+	stomp_fx = BLAST_TIME
+	blast_at = Vector2(from_x, model.air_from)
+	blast_px = model.blast_r
 
 
 func _drop_ghosts(n_ghosts: int, from_h: float, from_x: float, kicked := false) -> void:
@@ -1163,16 +1175,17 @@ func _draw_world() -> void:
 	var px := _sx(model.x)
 	var hand := Vector2(px, py - 15.0)
 	var thread_top := Vector2(THREAD_X, maxf(goal_y - 52.0, -4.0))   # 蜘蛛から垂れる
-	draw_line(thread_top, hand, C_GOLD, 1.0)
+	# 糸の色は上下で同じ。傷むほど少しずつ赤みが差し、切れそうになると赤く点滅
+	var tc := C_SILK
+	if model.state == ThreadModel.State.CLIMBING:
+		tc = C_SILK.lerp(C_RED, (1.0 - model.durability / ThreadModel.DURABILITY_MAX) * 0.7)
+		if model.time_to_snap(true, false) < 1.3 and fmod(t, 0.3) < 0.15:
+			tc = C_RED
+	draw_line(thread_top, hand, tc, 1.0)
 
 	# 糸（下側）と罪人と、糸の耐久度の○ゲージ
 	if model.state == ThreadModel.State.CLIMBING:
 		var snap := model.time_to_snap(true, model.dashing)
-		var tc := C_WHITE
-		if snap < 3.0:
-			tc = C_YELLOW
-		if snap < 1.3:
-			tc = C_RED if fmod(t, 0.3) < 0.15 else C_WHITE
 		# 下に余っている糸は、切った所（下端）まで。登るほど伸びていく
 		var end_y := minf(_sy(model.thread_end) - 15.0, H + 20.0)
 		var pts := PackedVector2Array([hand])
@@ -1220,22 +1233,24 @@ func _draw_world() -> void:
 	if not (model.invuln_left > 0.0 and fmod(t, 0.16) < 0.08):
 		_draw_kandata(Vector2(px, py))
 
-	# 踏みつけ: 足元から下へ広がる衝撃（罪人を踏み台にした）
-	if stomp_fx > 0.0 and not falling_thread.is_empty():
-		var sc0 := Vector2(_sx(falling_thread[-1][1]), _sy(model.air_from) + 20.0)
-		var sk := 1.0 - stomp_fx / 0.5
-		for k in range(3):
-			var ww := roundf(10.0 + sk * 50.0 + k * 8.0)
-			draw_rect(Rect2(sc0.x - ww, sc0.y + k * 6 + roundf(sk * 20.0), ww * 2, 1), Color(C_YELLOW, (1.0 - sk) * 0.8))
-		for k in range(6):
-			var lx2 := sc0.x - 15.0 + k * 6.0
-			draw_rect(Rect2(lx2, sc0.y + roundf(sk * 40.0), 1, 12), Color(C_WHITE, (1.0 - sk) * 0.7))
+	# 叫びの衝撃波: 円が一気に広がって、中の障害を消し飛ばす
+	if stomp_fx > 0.0:
+		var bc := Vector2(_sx(blast_at.x), _sy(blast_at.y))
+		var bk := 1.0 - stomp_fx / BLAST_TIME              # 0→1
+		var grow := 1.0 - pow(1.0 - minf(bk / 0.45, 1.0), 3.0)   # すばやく広がって止まる
+		var rr2 := roundf(blast_px * grow)
+		var fade := 1.0 - maxf(bk - 0.45, 0.0) / 0.55
+		draw_circle(bc, rr2, Color(C_WHITE, 0.18 * fade))
+		draw_arc(bc, rr2, 0, TAU, 48, Color(C_YELLOW, fade), 3.0)
+		draw_arc(bc, maxf(rr2 - 6.0, 0.0), 0, TAU, 48, Color(C_WHITE, 0.6 * fade), 1.0)
+		for k in range(16):   # 放射状の線
+			var ang := TAU * k / 16.0 + 0.2
+			var r0 := rr2 * 0.55
+			draw_line(bc + Vector2(cos(ang), sin(ang)) * r0, bc + Vector2(cos(ang), sin(ang)) * rr2, Color(C_WHITE, 0.5 * fade), 1.0)
 
 	# 叫び演出
 	if fx_shout > 0.0:
 		var c := Vector2(_sx(falling_thread[-1][1]) if not falling_thread.is_empty() else px, _sy(model.air_from))
-		var rad := roundf((0.9 - fx_shout) * 140.0)
-		draw_arc(c, rad, 0, TAU, 32, Color(C_ORANGE, fx_shout), 2.0)
 		var sw := font.get_string_size(shout_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x * 2.0
 		var sx := minf(c.x + 18.0, FIELD_W - sw - 6.0)   # 画面の右端からはみ出さないように
 		_label(Vector2(sx, c.y - 4.0), shout_text, 32, Color(C_YELLOW, minf(1.0, fx_shout * 2)))
@@ -1606,22 +1621,53 @@ func _draw_kandata(p: Vector2) -> void:
 
 
 func _draw_map() -> void:
-	# 右端の縦バー: 下が地獄、上の蓮が極楽。金が今の高さ、赤が迫るマグマ
-	draw_rect(Rect2(FIELD_W, 0, W - FIELD_W, H), C_BLACK)
-	_spr(SPR_LOTUS, Vector2(MAP_X + 3, MAP_TOP - 10), {"y": C_YELLOW}, false, 2)
+	# 右端の縦バー: 下が地獄、上の蓮が極楽。金=今の高さ、赤=マグマ、水色=叫べば届く高さ、白線=自己ベスト
+	draw_rect(Rect2(FIELD_W, 0, W - FIELD_W, H), Color8(14, 8, 12))
+	draw_rect(Rect2(FIELD_W, 0, 1, H), C_DARK)
+	var bx := MAP_X - 1.0
+	var bw := 8.0
+	var cx := bx + bw * 0.5
+	# 極楽の蓮（ゆっくり光る）
+	var glow := 0.25 + 0.2 * sin(t * 2.0)
+	draw_circle(Vector2(cx, MAP_TOP - 12.0), 9.0, Color(C_YELLOW, glow * 0.5))
+	_spr(SPR_LOTUS, Vector2(cx, MAP_TOP - 12), {"y": C_YELLOW}, false, 2)
+	# 枠と中身
+	draw_rect(Rect2(bx - 1.0, MAP_TOP - 1.0, bw + 2.0, MAP_BOT - MAP_TOP + 2.0), C_DARK)
+	draw_rect(Rect2(bx, MAP_TOP, bw, MAP_BOT - MAP_TOP), Color8(30, 14, 20))
+	# 目盛り: 100m ごと、500m は長く
+	for m in range(100, int(ThreadModel.GOAL), 100):
+		var ty := _h_to_map(float(m))
+		var long := m % 500 == 0
+		draw_rect(Rect2(bx - (4.0 if long else 2.0), ty, 4.0 if long else 2.0, 1), Color(C_WHITE, 0.45 if long else 0.25))
+	# 進んだ分（下から金色、上ほど明るく）
 	var cur := _h_to_map(model.height)
-	draw_rect(Rect2(MAP_X, MAP_TOP, 6, MAP_BOT - MAP_TOP), C_DARK)
-	draw_rect(Rect2(MAP_X, cur, 6, MAP_BOT - cur), C_GOLD)
-	var lv := _h_to_map(maxf(model.lava_h, 0.0))
-	var lcol := C_RED if fmod(t, 0.4) < 0.2 or model.height - model.lava_h > 15.0 else C_ORANGE
-	draw_rect(Rect2(MAP_X, lv, 6, MAP_BOT - lv), lcol)
-	# 今叫ぶとここまで跳べる（予告）
+	var yy := MAP_BOT - 2.0
+	while yy >= cur:
+		var k := (MAP_BOT - yy) / (MAP_BOT - MAP_TOP)
+		draw_rect(Rect2(bx + 1.0, yy, bw - 2.0, 2), C_ORANGE.lerp(C_GOLD, k))
+		yy -= 2.0
+	# 自己ベストの高さ
+	if best[difficulty] > 0 and best[difficulty] < int(ThreadModel.GOAL):
+		var by := _h_to_map(float(best[difficulty]))
+		draw_rect(Rect2(bx - 2.0, by, bw + 4.0, 1), Color(C_WHITE, 0.7))
+	# 叫べば届く高さ
 	if model.can_shout():
 		var jy := _h_to_map(model.height + model.jump_height())
-		draw_rect(Rect2(MAP_X, jy, 6, cur - jy), Color(C_CYAN, 0.5))
-		draw_rect(Rect2(MAP_X - 2, jy, 10, 1), C_CYAN)
-	_spr(SPR_HEAD, Vector2(MAP_X + 3, cur), {"h": C_HAIR, "s": C_SKIN, "k": C_BLACK}, false, 2)
-	_spr(SPR_FIRE[int(t * 6.0) % 2], Vector2(MAP_X + 3, MAP_BOT + 14), {"y": C_YELLOW, "o": C_ORANGE, "w": C_RED}, false, 1)
+		draw_rect(Rect2(bx + 1.0, jy, bw - 2.0, cur - jy), Color(C_CYAN, 0.35 + 0.15 * sin(t * 8.0)))
+		draw_rect(Rect2(bx - 2.0, jy, bw + 4.0, 1), C_CYAN)
+	# マグマ: 波打つ上端
+	if model.lava_h > 0.0:
+		var lv := _h_to_map(model.lava_h)
+		draw_rect(Rect2(bx + 1.0, lv, bw - 2.0, MAP_BOT - lv), C_RED)
+		for i in range(int(bw) - 2):
+			var wy := lv + roundf(sin(t * 6.0 + i * 1.3))
+			draw_rect(Rect2(bx + 1.0 + i, wy - 1.0, 1, 2), C_YELLOW if (i + int(t * 10.0)) % 3 == 0 else C_ORANGE)
+		if model.height - model.lava_h < 15.0 and fmod(t, 0.3) < 0.15:   # 迫ると枠が赤く点滅
+			draw_rect(Rect2(bx - 1.0, MAP_TOP - 1.0, 1, MAP_BOT - MAP_TOP + 2.0), C_RED)
+			draw_rect(Rect2(bx + bw, MAP_TOP - 1.0, 1, MAP_BOT - MAP_TOP + 2.0), C_RED)
+	# カンダタの顔
+	_spr(SPR_HEAD, Vector2(cx, cur), {"h": C_HAIR, "s": C_SKIN, "k": C_BLACK}, false, 2)
+	_spr(SPR_FIRE[int(t * 6.0) % 2], Vector2(cx, MAP_BOT + 14), {"y": C_YELLOW, "o": C_ORANGE, "w": C_RED}, false, 1)
 
 
 func _draw_hud() -> void:
