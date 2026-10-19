@@ -8,10 +8,11 @@ const W := 640.0
 const H := 360.0
 const FIELD_W := 616.0       # 遊ぶ画面の幅（右端の細い高度バー以外ぜんぶ）
 const THREAD_X := 308.0      # 揺れの中心
-const PLAYER_SY := 236.0     # カンダタを置く高さ
-const PPM := 4.2             # 1m あたりのドット
+const PLAYER_SY := 168.0     # カンダタを置く高さ
+const PPM := 3.6             # 1m あたりのドット
 const XS := 0.85              # モデルの横位置（px@1280）→ 画面ドット
 const GHOST_GAP := 14.0
+const G := 3.0               # 画面全体のドット1粒の大きさ。すべての要素をこの格子にそろえる
 const SC := 3                # キャラと障害物のドット1粒の大きさ（PICO-8 っぽく大きめ）
 const MAP_X := 625.0         # 高度マップ（縦の再生バー）
 const MAP_TOP := 34.0
@@ -403,6 +404,8 @@ const BLAST_TIME := 0.5
 var blast_at := Vector2.ZERO     # 衝撃波の中心（x: モデルpx, y: 高さ m）
 var blast_px := 0.0              # 衝撃波の半径（画面px）
 const C_SILK := P_LGREY   # 蜘蛛の糸の色
+var text_queue: Array = []        # この画面で描く文字（いちばん上の層に描く）
+var text_layer: Node2D
 var ring_nope := 0.0
 var anim_h := 0.0                # 登りモーション用: 前のフレームの高さ
 var climb_phase := 0.0           # 登った距離で進むモーションの位相
@@ -478,6 +481,13 @@ func _setup_pico8_filter() -> void:
 	rect.material = mat
 	layer.add_child(rect)
 	add_child(layer)
+	# 文字の層: フィルタより上。格子にそろえず、くっきり描く
+	var tl := CanvasLayer.new()
+	tl.layer = 101
+	text_layer = Node2D.new()
+	text_layer.draw.connect(_draw_text_layer)
+	tl.add_child(text_layer)
+	add_child(tl)
 
 
 func _new_model() -> void:
@@ -654,6 +664,8 @@ func _process(delta: float) -> void:
 	t += delta
 	if panel_open:
 		queue_redraw()
+		if text_layer:
+			text_layer.queue_redraw()
 		return
 	phase_t += delta
 	fx_shout = maxf(0.0, fx_shout - delta)
@@ -771,6 +783,8 @@ func _process(delta: float) -> void:
 		p[3] += delta
 	popups = popups.filter(func(p): return p[3] < 1.2)
 	queue_redraw()
+	if text_layer:
+		text_layer.queue_redraw()
 
 
 func _load_ranking() -> void:
@@ -942,7 +956,7 @@ func _draw_particles() -> void:
 		var a: float = clampf(p[2] / p[3], 0.0, 1.0)
 		var c: Color = p[4]
 		var sz: float = p[5]
-		draw_rect(Rect2(roundf(p[0].x), roundf(p[0].y), sz, sz), Color(c, c.a * a))
+		_px(Rect2(roundf(p[0].x), roundf(p[0].y), sz, sz), Color(c, c.a * a))
 
 
 # ---------------------------------------------------------------- 座標
@@ -1044,6 +1058,7 @@ func _hint() -> Array:
 # ---------------------------------------------------------------- 描画
 
 func _draw() -> void:
+	text_queue.clear()
 	draw_off = Vector2.ZERO
 	if shake > 0.0:
 		draw_off = Vector2(roundf(randf_range(-1, 1) * shake * 4.0), roundf(randf_range(-1, 1) * shake * 4.0))
@@ -1058,27 +1073,42 @@ func _draw() -> void:
 		draw_off = Vector2.ZERO
 		draw_set_transform(Vector2.ZERO)
 		if fx_hit > 0.0 and fmod(t, 0.1) < 0.05:
-			draw_rect(Rect2(0, 0, FIELD_W, H), Color(C_RED, 0.25))
+			_px(Rect2(0, 0, FIELD_W, H), Color(C_RED, 0.25))
 		if phase != Phase.TITLE:
 			_draw_map()
 			_draw_hud()
 		if phase == Phase.TITLE:
+			text_queue.clear()   # 下の景色の文字（目盛りなど）はタイトルで隠す
 			_draw_title()
 		elif phase == Phase.RESULT and phase_t > 0.9:
+			text_queue = text_queue.filter(func(q): return q[0].x >= FIELD_W)   # 盤面の文字は結果画面で隠す
 			_draw_result()
 	if won and phase_t < 0.9:   # 到達の瞬間の白い光
 		var fa := 1.0 - absf(phase_t - 0.35) / 0.55
-		draw_rect(Rect2(0, 0, W, H), Color(1, 1, 0.95, clampf(fa, 0.0, 1.0)))
+		_px(Rect2(0, 0, W, H), Color(1, 1, 0.95, clampf(fa, 0.0, 1.0)))
+		if fa > 0.5:
+			text_queue.clear()
 	if panel_open:
+		text_queue.clear()
 		_draw_panel()
 
 
-func _spr(rows: Array, pos: Vector2, pal: Dictionary, flip := false, sc := 2) -> void:
-	# ドット絵を描く。pos はスプライトの中心、sc は 1 文字あたりのドット数
+func _px(r: Rect2, col: Color) -> void:
+	# すべての四角を G ドットの格子にそろえて描く（細い線も G より細くならない）
+	var a := r.abs()
+	var x0 := floorf(a.position.x / G) * G
+	var y0 := floorf(a.position.y / G) * G
+	var x1 := maxf(ceilf(a.end.x / G) * G, x0 + G)
+	var y1 := maxf(ceilf(a.end.y / G) * G, y0 + G)
+	draw_rect(Rect2(x0, y0, x1 - x0, y1 - y0), col)
+
+
+func _spr(rows: Array, pos: Vector2, pal: Dictionary, flip := false, sc := 3) -> void:
+	# ドット絵を描く。pos はスプライトの中心、sc は 1 文字あたりのドット数（G の倍数）。左上を格子にそろえる
 	var h := rows.size()
 	var w: int = rows[0].length()
-	var ox := roundf(pos.x - w * sc * 0.5)
-	var oy := roundf(pos.y - h * sc * 0.5)
+	var ox := roundf((pos.x - w * sc * 0.5) / G) * G
+	var oy := roundf((pos.y - h * sc * 0.5) / G) * G
 	for yy in range(h):
 		var row: String = rows[yy]
 		for xx in range(w):
@@ -1096,10 +1126,10 @@ func _draw_world() -> void:
 	for bi in range(bands.size()):
 		var y0: float = H * edges[bi]
 		var y1: float = H * (edges[bi + 1] if bi + 1 < edges.size() else 1.0)
-		draw_rect(Rect2(0, y0, FIELD_W, y1 - y0), bands[bi])
+		_px(Rect2(0, y0, FIELD_W, y1 - y0), bands[bi])
 		if bi > 0:   # 境目: 前の色の横線を1行おきに残す
 			for k in range(4):
-				draw_rect(Rect2(0, y0 + k * 4.0, FIELD_W, 2 if k < 2 else 1), bands[bi - 1])
+				_px(Rect2(0, y0 + k * 4.0, FIELD_W, 2 if k < 2 else 1), bands[bi - 1])
 	# 遠くの岩の塔（シルエット、ゆっくり流れる）。てっぺんで炎がゆれる
 	var scroll := cam_h * PPM * 0.25
 	var seg := 90.0
@@ -1114,14 +1144,14 @@ func _draw_world() -> void:
 		draw_colored_polygon(PackedVector2Array([Vector2(sx - wid, base_y + 30), Vector2(sx - wid * 0.4, base_y - tall * 0.6),
 				tip, Vector2(sx + wid * 0.4, base_y - tall * 0.5), Vector2(sx + wid, base_y + 30)]), P_BLACK)
 		if hsh % 3 == 0:
-			_spr(SPR_FIRE[int(t * 6.0 + n) % 2], tip + Vector2(0, -8), {"y": P_YELLOW, "o": P_ORANGE, "w": P_RED}, false, 2)
+			_spr(SPR_FIRE[int(t * 6.0 + n) % 2], tip + Vector2(0, -8), {"y": P_YELLOW, "o": P_ORANGE, "w": P_RED}, false, 3)
 	# 舞い上がる火の粉
 	for i in range(18):
 		var ex := fmod(i * 53.0 + sin(t + i) * 6.0, FIELD_W)
 		var ey := fmod(i * 71.0 - t * (12.0 + i % 5 * 4.0) + cam_h * PPM * 0.3, H)
 		if ey < 0:
 			ey += H
-		draw_rect(Rect2(roundf(ex), roundf(ey), 2, 2), P_ORANGE if i % 3 else P_RED)
+		_px(Rect2(roundf(ex), roundf(ey), 2, 2), P_ORANGE if i % 3 else P_RED)
 	# 遠景の針山（手前よりゆっくり流れる）
 	_draw_needle_mountains()
 	# 左右の崖（揺れられる範囲の外）
@@ -1132,26 +1162,26 @@ func _draw_world() -> void:
 	while m < cam_h + 70.0:
 		var y := _sy(m)
 		if m >= 0 and m <= ThreadModel.GOAL and y > -10 and y < H + 10:
-			draw_rect(Rect2(4, y, 10, 1), Color(C_WHITE, 0.3))
+			_px(Rect2(4, y, 10, 1), Color(C_WHITE, 0.3))
 			_label(Vector2(16, y + 6), "%dm" % m, 16, Color(C_WHITE, 0.35))
 		m += 25
 
 	# 地獄の地面（0m）。カンダタはここから登り始める
 	var ground_y := _sy(0.0) + 24.0
 	if ground_y < H:
-		draw_rect(Rect2(0, ground_y, FIELD_W, H - ground_y), P_DPURP)
-		draw_rect(Rect2(0, ground_y, FIELD_W, 3), P_PINK)
+		_px(Rect2(0, ground_y, FIELD_W, H - ground_y), P_DPURP)
+		_px(Rect2(0, ground_y, FIELD_W, 3), P_PINK)
 		for i in range(0, int(FIELD_W), 6):   # でこぼこの地表
 			var bump := float((i * 13) % 4)
-			draw_rect(Rect2(i, ground_y - bump, 6, bump), P_DPURP)
+			_px(Rect2(i, ground_y - bump, 6, bump), P_DPURP)
 		for i in range(9):   # ひび割れと、そこから漏れる赤い光
 			var cx2 := float((i * 53 + 17) % int(FIELD_W))
 			var cy2 := ground_y + 8.0 + float((i * 29) % 30)
-			draw_rect(Rect2(cx2, cy2, 10, 1), Color(C_RED, 0.6 + 0.3 * sin(t * 2.0 + i)))
-			draw_rect(Rect2(cx2 + 8, cy2 + 1, 6, 1), Color(C_RED, 0.5))
+			_px(Rect2(cx2, cy2, 10, 1), Color(C_RED, 0.6 + 0.3 * sin(t * 2.0 + i)))
+			_px(Rect2(cx2 + 8, cy2 + 1, 6, 1), Color(C_RED, 0.5))
 		for i in range(5):   # 小さな炎
 			var fx2 := float((i * 97 + 40) % int(FIELD_W))
-			_spr(SPR_FIRE[int(t * 8.0 + i) % 2], Vector2(fx2, ground_y - 4.0), {"y": C_YELLOW, "o": C_ORANGE, "w": C_RED}, i % 2 == 0, 1)
+			_spr(SPR_FIRE[int(t * 8.0 + i) % 2], Vector2(fx2, ground_y - 4.0), {"y": C_YELLOW, "o": C_ORANGE, "w": C_RED}, i % 2 == 0, 3)
 
 	# 極楽（ゴール）
 	var goal_y := _sy(ThreadModel.GOAL)
@@ -1180,9 +1210,9 @@ func _draw_world() -> void:
 		# 岩棚: 画面の端から崖の縁まで続く道
 		var sx_a: float = 0.0 if left else lip - 6.0
 		var sw: float = lip + 6.0 if left else FIELD_W - lip + 6.0
-		draw_rect(Rect2(sx_a, py0, sw, 5), C_CLIFF_D)
-		draw_rect(Rect2(sx_a, py0, sw, 1), C_CLIFF_L)
-		draw_rect(Rect2(lip - 2.0 if left else lip - 6.0, py0 + 5, 8, 2), C_CLIFF_D)
+		_px(Rect2(sx_a, py0, sw, 5), C_CLIFF_D)
+		_px(Rect2(sx_a, py0, sw, 1), C_CLIFF_L)
+		_px(Rect2(lip - 2.0 if left else lip - 6.0, py0 + 5, 8, 2), C_CLIFF_D)
 		# 近づくと、端から縁へ走ってくる（飛びかかる位置まで）
 		var run_k := clampf((model.height - (pc.h - ThreadModel.SINNER_TRIGGER - 10.0)) / 10.0, 0.0, 1.0)
 		if run_k <= 0.0:
@@ -1232,8 +1262,8 @@ func _draw_world() -> void:
 		if show_oni and feet > -20.0 and oni_c.y - 40.0 < H:
 			var sx_b: float = 0.0 if left3 else lip3 - 10.0
 			var sw2: float = lip3 + 10.0 if left3 else FIELD_W - lip3 + 10.0
-			draw_rect(Rect2(sx_b, feet, sw2, 5), C_CLIFF_D)
-			draw_rect(Rect2(sx_b, feet, sw2, 1), C_CLIFF_L)
+			_px(Rect2(sx_b, feet, sw2, 5), C_CLIFF_D)
+			_px(Rect2(sx_b, feet, sw2, 1), C_CLIFF_L)
 			var rise := clampf(rk.t / 0.15, 0.0, 1.0)            # 岩棚の下から現れる
 			var sink := clampf((tau - 0.6) / 0.3, 0.0, 1.0)      # 投げたあと引っこむ
 			var off := roundf((1.0 - rise + sink) * 27.0)
@@ -1241,14 +1271,14 @@ func _draw_world() -> void:
 			var spr2: Array = SPR_ONI_UP if tau <= 0.0 else SPR_ONI_THROW
 			_spr(spr2, oni_c + Vector2(0, off), ONI_PAL, not left3, SC)
 			if off > 0.0:   # 岩棚の下に隠れている部分を、崖の色で覆う
-				draw_rect(Rect2(oni_c.x - 20.0, feet + 1.0, 40, off + 2.0), C_CLIFF)
-			draw_rect(Rect2(sx_b, feet, sw2, 4), C_CLIFF_D)
-			draw_rect(Rect2(sx_b, feet, sw2, 1), C_CLIFF_L)
+				_px(Rect2(oni_c.x - 20.0, feet + 1.0, 40, off + 2.0), C_CLIFF)
+			_px(Rect2(sx_b, feet, sw2, 4), C_CLIFF_D)
+			_px(Rect2(sx_b, feet, sw2, 1), C_CLIFF_L)
 		if tau <= 0.0:
 			# 振りかぶり中: 頭上の岩と、飛んでいく道筋（赤い点線）
 			var shake2 := roundf(sin(t * 50.0) * 1.0)
 			var hold := Vector2(hx + shake2, hy + roundf((1.0 - clampf(rk.t / 0.15, 0.0, 1.0)) * 27.0))
-			_spr(SPR_ROCK[0], hold, ROCK_PAL, false, 4)
+			_spr(SPR_ROCK[0], hold, ROCK_PAL, false, 3)
 			var pulse := 0.55 + 0.45 * absf(sin(t * 10.0))
 			var k3 := 0.0
 			var f: float = model.cfg.rock_flight
@@ -1256,14 +1286,14 @@ func _draw_world() -> void:
 				var pp: Vector2 = model.rock_pos(rk, k3)
 				var dpos := Vector2(_sx(pp.x), _sy(pp.y)).round()
 				if pulse > 0.4 or int(k3 / 0.06) % 2 == 0:   # 点滅は 16色のまま（半透明にしない）
-					draw_rect(Rect2(dpos.x - 1, dpos.y - 1, 3, 3), P_BLACK)
-					draw_rect(Rect2(dpos.x, dpos.y, 2, 2), P_RED if pulse > 0.75 else P_PINK)
+					_px(Rect2(dpos.x - 1, dpos.y - 1, 3, 3), P_BLACK)
+					_px(Rect2(dpos.x, dpos.y, 2, 2), P_RED if pulse > 0.75 else P_PINK)
 				k3 += 0.06
 			if hy < 6.0 and fmod(t, 0.3) < 0.2:   # 画面の上にいる鬼の予告
 				var wx := clampf(hx, 10.0, FIELD_W - 10.0)
-				draw_rect(Rect2(wx - 5, 2, 11, 2), C_RED)
-				draw_rect(Rect2(wx - 3, 4, 7, 2), C_RED)
-				draw_rect(Rect2(wx - 1, 6, 3, 2), C_RED)
+				_px(Rect2(wx - 5, 2, 11, 2), C_RED)
+				_px(Rect2(wx - 3, 4, 7, 2), C_RED)
+				_px(Rect2(wx - 1, 6, 3, 2), C_RED)
 				_label(Vector2(wx, 26), "！", 16, C_RED, HORIZONTAL_ALIGNMENT_CENTER)
 			elif hy > 0.0:
 				_label(Vector2(hx, hy - rr - 8.0), "！", 16, C_RED, HORIZONTAL_ALIGNMENT_CENTER)
@@ -1274,7 +1304,7 @@ func _draw_world() -> void:
 			continue
 		# 飛んでくる岩: 2コマで回りながら飛ぶ
 		var rf := int(tau * 10.0) % 2
-		_spr(SPR_ROCK[rf], Vector2(rkx, rky), ROCK_PAL, rk.side > 0.0, 4)
+		_spr(SPR_ROCK[rf], Vector2(rkx, rky), ROCK_PAL, rk.side > 0.0, 3)
 
 	# 糸（上側）: 天から手元へ
 	var py := _player_sy()
@@ -1287,7 +1317,7 @@ func _draw_world() -> void:
 		tc = C_SILK.lerp(C_RED, (1.0 - model.durability / ThreadModel.DURABILITY_MAX) * 0.7)
 		if model.time_to_snap(true, false) < 1.3 and fmod(t, 0.3) < 0.15:
 			tc = C_RED
-	draw_line(thread_top, hand, tc, 2.0)
+	draw_line(thread_top, hand, tc, 3.0)
 
 	# 糸（下側）と罪人と、糸の耐久度の○ゲージ
 	if model.state == ThreadModel.State.CLIMBING:
@@ -1306,13 +1336,13 @@ func _draw_world() -> void:
 				tip = last.lerp(Vector2(last.x, end_y), 1.0)
 			pts.append(tip)
 			if pts.size() >= 2:
-				draw_polyline(pts, tc, 2.0)
+				draw_polyline(pts, tc, 3.0)
 			# ちぎれた端のほつれ
-			draw_rect(Rect2(tip.x - 1, tip.y, 1, 2), Color(tc, 0.7))
-			draw_rect(Rect2(tip.x + 1, tip.y + 1, 1, 2), Color(tc, 0.7))
+			_px(Rect2(tip.x - 1, tip.y, 1, 2), Color(tc, 0.7))
+			_px(Rect2(tip.x + 1, tip.y + 1, 1, 2), Color(tc, 0.7))
 		else:
 			if pts.size() >= 2:
-				draw_polyline(pts, tc, 2.0)
+				draw_polyline(pts, tc, 3.0)
 		for g in range(int(model.ghosts)):
 			var gy := py + 66.0 + g * GHOST_GAP
 			if gy > H + 10.0:
@@ -1329,7 +1359,7 @@ func _draw_world() -> void:
 		var age: float = th[2]
 		var ty: float = _sy(th[0]) + roundf(age * age * 450.0)
 		var tx: float = _sx(th[1])
-		draw_line(Vector2(tx, ty), Vector2(tx + roundf(5.0 * age), ty + 350.0), Color(C_RED, maxf(0.0, 1.0 - age * 0.6)), 1.0)
+		draw_line(Vector2(tx, ty), Vector2(tx + roundf(5.0 * age), ty + 350.0), Color(C_RED, maxf(0.0, 1.0 - age * 0.6)), 3.0)
 	for f in falling_ghosts:   # 落ちていく罪人（手足をばたつかせて、そのまま落下）
 		var fr: int = int(f[2] * 1.5) % 2
 		var fp: Vector2 = f[0]
@@ -1348,11 +1378,11 @@ func _draw_world() -> void:
 		var fade := 1.0 - maxf(bk - 0.45, 0.0) / 0.55
 		draw_circle(bc, rr2, Color(C_WHITE, 0.18 * fade))
 		draw_arc(bc, rr2, 0, TAU, 48, Color(C_YELLOW, fade), 3.0)
-		draw_arc(bc, maxf(rr2 - 6.0, 0.0), 0, TAU, 48, Color(C_WHITE, 0.6 * fade), 1.0)
+		draw_arc(bc, maxf(rr2 - 6.0, 0.0), 0, TAU, 48, Color(C_WHITE, 0.6 * fade), 3.0)
 		for k in range(16):   # 放射状の線
 			var ang := TAU * k / 16.0 + 0.2
 			var r0 := rr2 * 0.55
-			draw_line(bc + Vector2(cos(ang), sin(ang)) * r0, bc + Vector2(cos(ang), sin(ang)) * rr2, Color(C_WHITE, 0.5 * fade), 1.0)
+			draw_line(bc + Vector2(cos(ang), sin(ang)) * r0, bc + Vector2(cos(ang), sin(ang)) * rr2, Color(C_WHITE, 0.5 * fade), 3.0)
 
 	# 叫び演出
 	if fx_shout > 0.0:
@@ -1374,7 +1404,7 @@ func _draw_world() -> void:
 		var ta := clampf(minf(tip_t / 0.25, (TIP_TIME - tip_t) / 0.4), 0.0, 1.0)
 		var tw2 := font.get_string_size(tip_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
 		var tx := roundf(FIELD_W * 0.5 - tw2 * 0.5)
-		draw_rect(Rect2(tx - 8, H - 26, tw2 + 16, 20), Color(C_BLACK, 0.65 * ta))
+		_px(Rect2(tx - 8, H - 26, tw2 + 16, 20), Color(C_BLACK, 0.65 * ta))
 		_label(Vector2(tx, H - 10), tip_text, 16, Color(C_WHITE, ta))
 
 
@@ -1393,27 +1423,27 @@ func _draw_lava() -> void:
 			for i in range(0, int(FIELD_W), 23):
 				var cy := ground_y + 6.0 + float((i * 7) % 20)
 				if cy < H:
-					draw_rect(Rect2(i, cy, 8 + (i % 3) * 3, 1), Color(C_ORANGE, 0.25 + 0.6 * glow * (0.6 + 0.4 * sin(t * 4.0 + i))))
+					_px(Rect2(i, cy, 8 + (i % 3) * 3, 1), Color(C_ORANGE, 0.25 + 0.6 * glow * (0.6 + 0.4 * sin(t * 4.0 + i))))
 		return
 	if top > H + 8.0:
 		return
 	# 熱気: 上へ行くほど薄くなる橙の層（ゆらゆら）
 	for i in range(10):
 		var hy := top - 4.0 - i * 5.0
-		draw_rect(Rect2(0, hy + roundf(sin(t * 2.0 + i) * 1.0), FIELD_W, 5), Color(C_ORANGE, 0.16 - i * 0.015))
+		_px(Rect2(0, hy + roundf(sin(t * 2.0 + i) * 1.0), FIELD_W, 5), Color(C_ORANGE, 0.16 - i * 0.015))
 	# 本体: 深いところほど暗い赤
 	var depth_cols := [P_RED, P_RED, P_DPURP, P_DPURP, P_DBLUE]
 	for i in range(5):
-		draw_rect(Rect2(0, top + 4.0 + i * 8.0, FIELD_W, 8 if i < 4 else H - top + 10.0), depth_cols[i])
+		_px(Rect2(0, top + 4.0 + i * 8.0, FIELD_W, 8 if i < 4 else H - top + 10.0), depth_cols[i])
 	# 表面: 二つの波を重ねた、うねる縁
 	var x := 0.0
 	while x < FIELD_W:
 		var w1 := sin(x * 0.07 + t * 2.6) * 2.5 + sin(x * 0.023 - t * 1.7) * 3.0
 		var wy := roundf(top + w1)
-		draw_rect(Rect2(x, wy - 1.0, 2, 3), C_YELLOW)
-		draw_rect(Rect2(x, wy + 2.0, 2, 4), C_ORANGE)
+		_px(Rect2(x, wy - 1.0, 2, 3), C_YELLOW)
+		_px(Rect2(x, wy + 2.0, 2, 4), C_ORANGE)
 		if int(x * 0.5 + t * 30.0) % 19 < 2:
-			draw_rect(Rect2(x, wy - 2.0, 2, 1), C_WHITE)   # きらめき
+			_px(Rect2(x, wy - 2.0, 2, 1), C_WHITE)   # きらめき
 		x += 2.0
 	# 表面を流れる黒い固まり（冷えた溶岩）と、その割れ目の光
 	for k in range(9):
@@ -1423,15 +1453,15 @@ func _draw_lava() -> void:
 		cx -= 30.0
 		var cw := 14.0 + float(k % 4) * 6.0
 		var cy2 := top + 7.0 + float(k % 3) * 7.0
-		draw_rect(Rect2(roundf(cx), roundf(cy2), cw, 3), P_DPURP)
-		draw_rect(Rect2(roundf(cx + cw * 0.4), roundf(cy2 + 1.0), 3, 1), C_ORANGE)
+		_px(Rect2(roundf(cx), roundf(cy2), cw, 3), P_DPURP)
+		_px(Rect2(roundf(cx + cw * 0.4), roundf(cy2 + 1.0), 3, 1), C_ORANGE)
 	# 泡: ふくらんで、はじける
 	for k in range(7):
 		var bx := fmod(k * 89.0 + 23.0 + floorf(t * 0.6 + k * 0.31) * 137.0, FIELD_W)
 		var ph := fmod(t * 0.6 + k * 0.31, 1.0)
 		if ph < 0.35:
 			var rr := 1.0 + ph * 14.0
-			draw_arc(Vector2(bx, top + 2.0), rr, PI, TAU, 10, C_YELLOW, 1.0)
+			draw_arc(Vector2(bx, top + 2.0), rr, PI, TAU, 10, C_YELLOW, 3.0)
 			draw_circle(Vector2(bx, top + 3.0), rr - 1.0, Color(C_ORANGE, 0.8))
 
 
@@ -1442,9 +1472,9 @@ func _draw_heat_edge() -> void:
 		return
 	var k := clampf(1.0 - gap / 25.0, 0.0, 1.0) * (0.6 + 0.4 * absf(sin(t * 6.0)))
 	for i in range(8):
-		draw_rect(Rect2(0, H - 8.0 - i * 6.0, FIELD_W, 6), Color(C_RED, 0.3 * k * (1.0 - i / 8.0)))
-		draw_rect(Rect2(i * 4.0, 0, 4, H), Color(C_RED, 0.12 * k * (1.0 - i / 8.0)))
-		draw_rect(Rect2(FIELD_W - 4.0 - i * 4.0, 0, 4, H), Color(C_RED, 0.12 * k * (1.0 - i / 8.0)))
+		_px(Rect2(0, H - 8.0 - i * 6.0, FIELD_W, 6), Color(C_RED, 0.3 * k * (1.0 - i / 8.0)))
+		_px(Rect2(i * 4.0, 0, 4, H), Color(C_RED, 0.12 * k * (1.0 - i / 8.0)))
+		_px(Rect2(FIELD_W - 4.0 - i * 4.0, 0, 4, H), Color(C_RED, 0.12 * k * (1.0 - i / 8.0)))
 
 
 func _cliff_edge(world_y: float, left: bool) -> float:
@@ -1465,31 +1495,31 @@ func _draw_cliffs() -> void:
 			var w: float = ex if left else FIELD_W - ex
 			# 岩の地層: 世界に固定した横縞
 			var band := int(floorf(wy / 2.5)) % 3
-			draw_rect(Rect2(x0, yy, w, 2), P_DBLUE)
+			_px(Rect2(x0, yy, w, 2), P_DBLUE)
 			# 石積みの目地（世界に固定。段ごとに縦の目地をずらす）
 			var wpx := wy * PPM
 			var course_i := int(floorf(wpx / 24.0))
 			if fmod(wpx, 24.0) < 3.0:
-				draw_rect(Rect2(x0, yy, w, 2), P_BLACK)
+				_px(Rect2(x0, yy, w, 2), P_BLACK)
 			else:
 				var jx := 16.0 if course_i % 2 == 0 else 0.0
 				var gx2 := jx
 				while gx2 < w:
 					var bxx: float = (x0 + gx2) if left else (ex + gx2)
-					draw_rect(Rect2(bxx, yy, 3, 2), P_BLACK)
+					_px(Rect2(bxx, yy, 3, 2), P_BLACK)
 					if (course_i * 3 + int(gx2 / 32.0) * 5) % 7 == 0:   # ところどころ紫の石
-						draw_rect(Rect2(bxx + 3.0, yy, minf(29.0, w - gx2 - 3.0), 2), P_DPURP)
+						_px(Rect2(bxx + 3.0, yy, minf(29.0, w - gx2 - 3.0), 2), P_DPURP)
 					gx2 += 32.0
 			# 縁: 岩肌の明るい面と、輪郭
-			draw_rect(Rect2(ex - 3.0 if left else ex, yy, 3, 2), P_LAV)
-			draw_rect(Rect2(ex - 3.0 if left else ex + 2.0, yy, 1, 2), P_WHITE if band == 0 else P_LAV)
+			_px(Rect2(ex - 3.0 if left else ex, yy, 3, 2), P_LAV)
+			_px(Rect2(ex - 3.0 if left else ex + 2.0, yy, 1, 2), P_WHITE if band == 0 else P_LAV)
 			yy += 2.0
 		# ひび割れ（世界に固定）
 		var m0 := floori(cam_h - 70.0)
 		for k in range(m0, m0 + 140, 7):
 			var cy := _sy(float(k))
 			var cx: float = (8.0 + float((k * 37) % 50)) if left else (FIELD_W - 10.0 - float((k * 41) % 50))
-			draw_rect(Rect2(cx, cy, 6, 2), P_BLACK)
+			_px(Rect2(cx, cy, 6, 2), P_BLACK)
 
 
 func _draw_needle_mountains() -> void:
@@ -1516,9 +1546,9 @@ func _draw_needle_mountains() -> void:
 				var ly := roundf(lerpf(tip.y, lb, f))
 				var half := span * 0.5 * f
 				var nl := 3.0 + float((st * 7 + k) % 4)
-				draw_rect(Rect2(roundf(tip.x - half), ly - nl, 1, nl), needle)
-				draw_rect(Rect2(roundf(tip.x + half), ly - nl, 1, nl), needle)
-			draw_rect(Rect2(tip.x, tip.y - 6.0, 1, 6), needle)
+				_px(Rect2(roundf(tip.x - half), ly - nl, 1, nl), needle)
+				_px(Rect2(roundf(tip.x + half), ly - nl, 1, nl), needle)
+			_px(Rect2(tip.x, tip.y - 6.0, 1, 6), needle)
 
 
 func _draw_goal(goal_y: float) -> void:
@@ -1528,26 +1558,26 @@ func _draw_goal(goal_y: float) -> void:
 	var ceil_bot := goal_y - 6.0
 	var surf := goal_y - 150.0          # 池の水面（下から見上げた面）
 	if surf > -400.0:
-		draw_rect(Rect2(0, -400, FIELD_W, surf + 400.0), P_WHITE)       # 水面の向こう: 極楽の光
-		draw_rect(Rect2(0, surf - 10.0, FIELD_W, 10), P_PEACH)
+		_px(Rect2(0, -400, FIELD_W, surf + 400.0), P_WHITE)       # 水面の向こう: 極楽の光
+		_px(Rect2(0, surf - 10.0, FIELD_W, 10), P_PEACH)
 	# 水: 水面に近いほど明るい青、天井に近いほど深い藍
 	var yy := surf
 	while yy < ceil_bot:
 		var k := clampf((yy - surf) / (ceil_bot - surf), 0.0, 1.0)
-		draw_rect(Rect2(0, yy, FIELD_W, 4), P_BLUE if k < 0.4 else P_DBLUE)
+		_px(Rect2(0, yy, FIELD_W, 4), P_BLUE if k < 0.4 else P_DBLUE)
 		yy += 4.0
 	# 水面のゆらめき
 	var x := 0.0
 	while x < FIELD_W:
 		var wy := roundf(surf + sin(x * 0.09 + t * 2.0) * 1.5)
-		draw_rect(Rect2(x, wy, 2, 2), P_WHITE)
+		_px(Rect2(x, wy, 2, 2), P_WHITE)
 		x += 2.0
 	# 水の中の光の網（コースティクス）
 	for i in range(18):
 		var cx := fmod(i * 67.0 + t * (6.0 + i % 4 * 3.0), FIELD_W + 40.0) - 20.0
 		var cy := surf + 8.0 + float((i * 29) % int(maxf(ceil_top - surf - 16.0, 8.0)))
 		var near := (cy - surf) / maxf(ceil_top - surf, 1.0) < 0.45
-		draw_rect(Rect2(roundf(cx), roundf(cy + sin(t * 2.0 + i) * 2.0), 6 + i % 3 * 3, 1), P_WHITE if near else P_BLUE)
+		_px(Rect2(roundf(cx), roundf(cy + sin(t * 2.0 + i) * 2.0), 6 + i % 3 * 3, 1), P_WHITE if near else P_BLUE)
 	# 蓮の葉（下から見ると黒い影）と、水中へ垂れる茎
 	var leaves := [40.0, 120.0, 210.0, 400.0, 480.0, 570.0]
 	for i in range(leaves.size()):
@@ -1555,8 +1585,8 @@ func _draw_goal(goal_y: float) -> void:
 		var lw := 22.0 + float(i % 3) * 6.0
 		for row in range(4):
 			var hw := roundf(lw * sqrt(1.0 - pow((row - 1.5) / 2.0, 2.0)))
-			draw_rect(Rect2(roundf(lx - hw), surf + 1.0 + row, hw * 2.0, 1), P_DGREEN)
-		draw_rect(Rect2(roundf(lx), surf + 5.0, 1, 30.0 + float(i % 3) * 18.0), P_DGREEN)
+			_px(Rect2(roundf(lx - hw), surf + 1.0 + row, hw * 2.0, 1), P_DGREEN)
+		_px(Rect2(roundf(lx), surf + 5.0, 1, 30.0 + float(i % 3) * 18.0), P_DGREEN)
 	# 水面の上に咲く白い蓮
 	for i in range(3):
 		var fx: float = [160.0, 440.0, 540.0][i]
@@ -1570,7 +1600,7 @@ func _draw_goal(goal_y: float) -> void:
 		while step < len:
 			var f := step / len
 			if int(step / 2.0) % (2 if f < 0.5 else 3) == 0:
-				draw_rect(Rect2(roundf(x0 + spread_x * f * 4.0), ceil_bot + step, 1, 2), P_BLUE if f < 0.6 else P_DBLUE.lerp(P_BLUE, 1.0 - f))
+				_px(Rect2(roundf(x0 + spread_x * f * 4.0), ceil_bot + step, 1, 2), P_BLUE if f < 0.6 else P_DBLUE.lerp(P_BLUE, 1.0 - f))
 			step += 2.0
 	# 岩の天井（穴は下ほど広い）
 	yy = ceil_top
@@ -1578,21 +1608,21 @@ func _draw_goal(goal_y: float) -> void:
 		var k := (yy - ceil_top) / (ceil_bot - ceil_top)
 		var hw := roundf(46.0 + 20.0 * k + sin(yy * 0.7) * 3.0)
 		var col: Color = P_BLACK if k < 0.5 else P_DBLUE
-		draw_rect(Rect2(0, yy, THREAD_X - hw, 2), col)
-		draw_rect(Rect2(THREAD_X + hw, yy, FIELD_W - THREAD_X - hw, 2), col)
-		draw_rect(Rect2(THREAD_X - hw - 2.0, yy, 2, 2), P_LAV)   # 穴のふち
-		draw_rect(Rect2(THREAD_X + hw, yy, 2, 2), P_LAV)
+		_px(Rect2(0, yy, THREAD_X - hw, 2), col)
+		_px(Rect2(THREAD_X + hw, yy, FIELD_W - THREAD_X - hw, 2), col)
+		_px(Rect2(THREAD_X - hw - 2.0, yy, 2, 2), P_LAV)   # 穴のふち
+		_px(Rect2(THREAD_X + hw, yy, 2, 2), P_LAV)
 		yy += 2.0
-	draw_rect(Rect2(0, ceil_top - 2, FIELD_W, 2), P_DGREY)
+	_px(Rect2(0, ceil_top - 2, FIELD_W, 2), P_DGREY)
 	for i in range(0, int(FIELD_W), 8):   # 天井の下側のギザギザ
 		if absf(i + 4.0 - THREAD_X) < 70.0:
 			continue
 		var dh := 2.0 + float((i * 7) % 5) * 2.0
-		draw_rect(Rect2(i, ceil_bot, 8, dh), P_DBLUE)
-		draw_rect(Rect2(i + 2, ceil_bot + dh, 4, 2), P_BLACK)
+		_px(Rect2(i, ceil_bot, 8, dh), P_DBLUE)
+		_px(Rect2(i + 2, ceil_bot + dh, 4, 2), P_BLACK)
 	# 蜘蛛と、水面へ続く糸
 	var spy := goal_y - 61.0 + roundf(sin(t * 2.0))
-	draw_rect(Rect2(THREAD_X, surf, 1, spy - surf), P_LGREY)
+	_px(Rect2(THREAD_X, surf, 1, spy - surf), P_LGREY)
 	_spr(SPR_SPIDER, Vector2(THREAD_X, spy), {"l": P_WHITE, "b": P_DGREY, "e": P_RED}, false, SC)
 
 
@@ -1600,13 +1630,13 @@ func _draw_meadow() -> void:
 	# 極楽: 青空、流れる雲、遠くの丘、風に揺れる草原
 	var horizon := 214.0
 	# 朝の空: 上は青、地平線に近づくほど白い横線が増えていく（PICO-8 の網かけ風）
-	draw_rect(Rect2(0, 0, W, horizon), P_BLUE)
+	_px(Rect2(0, 0, W, horizon), P_BLUE)
 	var sy := horizon - 90.0
 	while sy < horizon:
 		var f := (sy - (horizon - 90.0)) / 90.0
 		var every := 4 if f < 0.35 else (2 if f < 0.7 else 1)
 		if int((sy - (horizon - 90.0)) / 2.0) % every == 0:
-			draw_rect(Rect2(0, sy, W, 1), P_WHITE if f > 0.5 else P_LGREY)
+			_px(Rect2(0, sy, W, 1), P_WHITE if f > 0.5 else P_LGREY)
 		sy += 2.0
 	# 太陽
 	var sun := Vector2(540, 56)
@@ -1615,7 +1645,7 @@ func _draw_meadow() -> void:
 	for k in range(8):
 		var a := TAU * k / 8.0 + t * 0.2
 		var p0 := sun + Vector2(cos(a), sin(a)) * 32.0
-		draw_rect(Rect2(roundf(p0.x) - 1, roundf(p0.y) - 1, 3, 3), P_YELLOW)
+		_px(Rect2(roundf(p0.x) - 1, roundf(p0.y) - 1, 3, 3), P_YELLOW)
 	# 流れる雲
 	for i in range(5):
 		var cx := fmod(i * 170.0 + t * (8.0 + i * 3.0), W + 120.0) - 60.0
@@ -1625,17 +1655,17 @@ func _draw_meadow() -> void:
 	for i in range(3):
 		var bx := fmod(t * 30.0 + i * 90.0, W + 60.0) - 30.0
 		var by := 90.0 + i * 14.0 + roundf(sin(t * 3.0 + i) * 3.0)
-		_spr(SPR_BIRD, Vector2(roundf(bx), by), {"b": P_DBLUE}, false, 1)
+		_spr(SPR_BIRD, Vector2(roundf(bx), by), {"b": P_DBLUE}, false, 3)
 	# 遠くの丘
 	for x in range(0, int(W), 2):
 		var hh := 26.0 + sin(x * 0.012) * 14.0 + sin(x * 0.031 + 1.0) * 6.0
-		draw_rect(Rect2(x, horizon - roundf(hh), 2, roundf(hh)), C_HILL)
+		_px(Rect2(x, horizon - roundf(hh), 2, roundf(hh)), C_HILL)
 		var hh2 := 12.0 + sin(x * 0.02 + 2.0) * 8.0
-		draw_rect(Rect2(x, horizon - roundf(hh2), 2, roundf(hh2)), C_HILL_D)
+		_px(Rect2(x, horizon - roundf(hh2), 2, roundf(hh2)), C_HILL_D)
 	# 草原
-	draw_rect(Rect2(0, horizon, W, H - horizon), C_GRASS)
+	_px(Rect2(0, horizon, W, H - horizon), C_GRASS)
 	for i in range(5):
-		draw_rect(Rect2(0, horizon + 10 + i * 28, W, 2), C_GRASS_D.lerp(C_GRASS, 0.5))
+		_px(Rect2(0, horizon + 10 + i * 28, W, 2), C_GRASS_D.lerp(C_GRASS, 0.5))
 	# 風: 草がそよぐ
 	var wind := sin(t * 1.6) * 0.5 + 0.5
 	for i in range(220):
@@ -1644,26 +1674,26 @@ func _draw_meadow() -> void:
 		var ht := 4.0 + float(i % 4) * 2.0
 		var sway := roundf((sin(t * 3.0 + gx * 0.04) * 1.5 + wind * 2.0) * (ht / 8.0))
 		var gc := C_GRASS_L if i % 3 == 0 else C_GRASS_D
-		draw_rect(Rect2(gx, gy - ht * 0.5, 1, ht * 0.5), gc)
-		draw_rect(Rect2(gx + sway, gy - ht, 1, ht * 0.5), gc)
+		_px(Rect2(gx, gy - ht * 0.5, 1, ht * 0.5), gc)
+		_px(Rect2(gx + sway, gy - ht, 1, ht * 0.5), gc)
 	# 花
 	for i in range(40):
 		var fx := float((i * 97 + 13) % int(W))
 		var fy := horizon + 10.0 + float((i * 61) % int(H - horizon - 14.0))
 		var fc: Color = [P_WHITE, P_YELLOW, P_PINK][i % 3]
 		var fs := roundf(sin(t * 3.0 + fx * 0.04) * 1.0)
-		draw_rect(Rect2(fx + fs - 1, fy, 3, 1), fc)
-		draw_rect(Rect2(fx + fs, fy - 1, 1, 3), fc)
+		_px(Rect2(fx + fs - 1, fy, 3, 1), fc)
+		_px(Rect2(fx + fs, fy - 1, 1, 3), fc)
 	# 風の筋と、舞う花びら
 	for i in range(6):
 		var wx := fmod(t * 140.0 + i * 120.0, W + 200.0) - 100.0
 		var wy := 120.0 + i * 34.0 + roundf(sin(t * 2.0 + i) * 4.0)
-		draw_rect(Rect2(roundf(wx), wy, 24, 1), Color(C_CLOUD, 0.5))
-		draw_rect(Rect2(roundf(wx) + 30, wy + 2, 10, 1), Color(C_CLOUD, 0.35))
+		_px(Rect2(roundf(wx), wy, 24, 1), Color(C_CLOUD, 0.5))
+		_px(Rect2(roundf(wx) + 30, wy + 2, 10, 1), Color(C_CLOUD, 0.35))
 	for i in range(14):
 		var px := fmod(t * (50.0 + i * 6.0) + i * 47.0, W + 40.0) - 20.0
 		var py := 150.0 + fmod(i * 23.0 + sin(t * 2.0 + i) * 10.0, 180.0)
-		draw_rect(Rect2(roundf(px), roundf(py), 2, 1), P_PINK)
+		_px(Rect2(roundf(px), roundf(py), 2, 1), P_PINK)
 
 	# 蓮池: 池の底から地獄へ糸が垂れている（原作どおり）
 	var pond := Vector2(300, 298)
@@ -1674,16 +1704,16 @@ func _draw_meadow() -> void:
 		if f <= 0.0:
 			continue
 		var hw := roundf((prx + 6.0) * sqrt(f))
-		draw_rect(Rect2(pond.x - hw, pond.y + row, hw * 2, 1), P_DGREEN)   # 岸
+		_px(Rect2(pond.x - hw, pond.y + row, hw * 2, 1), P_DGREEN)   # 岸
 	for row in range(int(-pry), int(pry)):
 		var hw := roundf(prx * sqrt(1.0 - pow(row / pry, 2.0)))
 		var wc := P_BLUE.lerp(P_DBLUE, (row + pry) / (pry * 2.0) * 0.5)
-		draw_rect(Rect2(pond.x - hw, pond.y + row, hw * 2, 1), wc)
+		_px(Rect2(pond.x - hw, pond.y + row, hw * 2, 1), wc)
 	for i in range(16):   # さざ波
 		var rx := pond.x - prx * 0.8 + fmod(i * 41.0 + t * 10.0, prx * 1.6)
 		var ry := pond.y - pry * 0.7 + float((i * 23) % int(pry * 1.4))
 		if pow((rx - pond.x) / prx, 2.0) + pow((ry - pond.y) / pry, 2.0) < 0.8:
-			draw_rect(Rect2(roundf(rx), roundf(ry), 4 + i % 3 * 2, 1), Color(C_CLOUD, 0.55))
+			_px(Rect2(roundf(rx), roundf(ry), 4 + i % 3 * 2, 1), Color(C_CLOUD, 0.55))
 	# 蓮の葉と花（ゆらゆら）
 	var pads := [Vector2(-120, -6), Vector2(-60, 22), Vector2(70, -18), Vector2(110, 16), Vector2(-20, -28), Vector2(140, -4), Vector2(30, 30)]
 	for i in range(pads.size()):
@@ -1696,9 +1726,9 @@ func _draw_meadow() -> void:
 
 	# 真ん中の大きな蓮の葉と、蜘蛛。糸は葉の脇から池の中へ
 	var leaf := pond + Vector2(0, 4)
-	_spr(SPR_LILY_PAD, leaf, {"g": P_DGREEN, "G": P_GREEN}, false, 4)
+	_spr(SPR_LILY_PAD, leaf, {"g": P_DGREEN, "G": P_GREEN}, false, 6)
 	var sp := leaf + Vector2(30, -8)
-	draw_line(sp + Vector2(-6, 4), leaf + Vector2(20, 10), Color(C_GOLD, 0.9), 1.0)
+	draw_line(sp + Vector2(-6, 4), leaf + Vector2(20, 10), Color(C_GOLD, 0.9), 3.0)
 	_spr(SPR_SPIDER, sp + Vector2(0, roundf(sin(t * 2.0))), {"l": P_BLACK, "b": P_DGREY, "e": P_RED})
 
 	# カンダタ: 水面からしぶきを上げて飛び出し、葉の上で両手を上げて喜ぶ
@@ -1707,11 +1737,11 @@ func _draw_meadow() -> void:
 		var sk := (phase_t - 0.35) / 1.25
 		for j in range(3):
 			var rr := roundf(8.0 + sk * 60.0 + j * 10.0)
-			draw_arc(leaf, rr, PI * 1.05, PI * 1.95, 24, Color(C_CLOUD, maxf(0.0, 0.8 - sk)), 1.0)
+			draw_arc(leaf, rr, PI * 1.05, PI * 1.95, 24, Color(C_CLOUD, maxf(0.0, 0.8 - sk)), 3.0)
 		for j in range(8):
 			var dx := (j - 3.5) * 6.0
 			var dy := -sin(sk * PI) * (30.0 + (j % 3) * 10.0)
-			draw_rect(Rect2(leaf.x + roundf(dx * (1.0 + sk * 2.0)), leaf.y - 6 + roundf(dy), 2, 2), Color(C_CLOUD, maxf(0.0, 1.0 - sk)))
+			_px(Rect2(leaf.x + roundf(dx * (1.0 + sk * 2.0)), leaf.y - 6 + roundf(dy), 2, 2), Color(C_CLOUD, maxf(0.0, 1.0 - sk)))
 	var ky := lerpf(leaf.y + 20.0, leaf.y - 24.0, 1.0 - (1.0 - k) * (1.0 - k)) - roundf(absf(sin(t * 5.0)) * 4.0) * k
 	_spr(SPR_KANDATA_JUMP, Vector2(leaf.x - 4, roundf(ky)), {"s": C_SKIN, "h": C_HAIR, "k": C_BLACK, "m": C_RED, "c": C_CLOTH}, false, 3)
 
@@ -1721,11 +1751,11 @@ func _draw_meadow() -> void:
 	var halo := bud + Vector2(0, -30)
 	draw_circle(halo, 44.0, Color(C_YELLOW, 0.10 + 0.06 * glow))
 	draw_circle(halo, 32.0, Color(C_YELLOW, 0.18))
-	draw_arc(halo, 34.0, 0, TAU, 40, Color(C_GOLD, 0.85), 1.0)
+	draw_arc(halo, 34.0, 0, TAU, 40, Color(C_GOLD, 0.85), 3.0)
 	for k2 in range(12):   # 後光
 		var a2 := TAU * k2 / 12.0
 		var p2 := halo + Vector2(cos(a2), sin(a2)) * (38.0 + 2.0 * glow)
-		draw_rect(Rect2(roundf(p2.x) - 1, roundf(p2.y) - 1, 2, 2), Color(C_YELLOW, 0.7))
+		_px(Rect2(roundf(p2.x) - 1, roundf(p2.y) - 1, 2, 2), Color(C_YELLOW, 0.7))
 	_spr(SPR_BUDDHA, bud, {"h": P_DBLUE, "s": P_YELLOW, "k": P_BROWN,
 			"m": P_ORANGE, "w": P_WHITE, "r": P_ORANGE, "R": P_BROWN}, false, 3)
 	_draw_particles()
@@ -1748,7 +1778,7 @@ func _draw_ring(c: Vector2, snap: float) -> void:
 		c.x += roundf(sin(ring_nope * 60.0) * 2.0)
 	if snap < 1.5:   # 切れそう: 赤く脈打つ
 		col = C_RED if fmod(t, 0.3) < 0.18 else C_YELLOW
-		draw_arc(c, 11.0 + roundf(absf(sin(t * 12.0)) * 2.0), 0, TAU, 24, col, 1.0)
+		draw_arc(c, 11.0 + roundf(absf(sin(t * 12.0)) * 2.0), 0, TAU, 24, col, 3.0)
 		if model.can_shout():
 			_label(Vector2(c.x + 14, c.y + 6), "叫べ！", 16, col)
 
@@ -1785,52 +1815,51 @@ func _draw_kandata(p: Vector2) -> void:
 
 func _draw_map() -> void:
 	# 右端の縦バー: 下が地獄、上の蓮が極楽。金=今の高さ、赤=マグマ、水色=叫べば届く高さ、白線=自己ベスト
-	draw_rect(Rect2(FIELD_W, 0, W - FIELD_W, H), P_BLACK)
-	draw_rect(Rect2(FIELD_W, 0, 1, H), C_DARK)
+	_px(Rect2(FIELD_W, 0, W - FIELD_W, H), P_BLACK)
+	_px(Rect2(FIELD_W, 0, 1, H), C_DARK)
 	var bx := MAP_X - 1.0
 	var bw := 8.0
 	var cx := bx + bw * 0.5
 	# 極楽の蓮（ゆっくり光る）
 	var glow := 0.25 + 0.2 * sin(t * 2.0)
 	draw_circle(Vector2(cx, MAP_TOP - 12.0), 9.0, Color(C_YELLOW, glow * 0.5))
-	_spr(SPR_LOTUS, Vector2(cx, MAP_TOP - 12), {"y": C_YELLOW}, false, 2)
+	_spr(SPR_LOTUS, Vector2(cx, MAP_TOP - 12), {"y": C_YELLOW}, false, 3)
 	# 枠と中身
-	draw_rect(Rect2(bx - 1.0, MAP_TOP - 1.0, bw + 2.0, MAP_BOT - MAP_TOP + 2.0), C_DARK)
-	draw_rect(Rect2(bx, MAP_TOP, bw, MAP_BOT - MAP_TOP), P_DBLUE)
+	_px(Rect2(bx - 1.0, MAP_TOP - 1.0, bw + 2.0, MAP_BOT - MAP_TOP + 2.0), C_DARK)
+	_px(Rect2(bx, MAP_TOP, bw, MAP_BOT - MAP_TOP), P_DBLUE)
 	# 目盛り: 100m ごと、500m は長く
 	for m in range(100, int(ThreadModel.GOAL), 100):
 		var ty := _h_to_map(float(m))
 		var long := m % 500 == 0
-		draw_rect(Rect2(bx - (4.0 if long else 2.0), ty, 4.0 if long else 2.0, 1), Color(C_WHITE, 0.45 if long else 0.25))
+		_px(Rect2(bx - (4.0 if long else 2.0), ty, 4.0 if long else 2.0, 1), Color(C_WHITE, 0.45 if long else 0.25))
 	# 進んだ分（下から金色、上ほど明るく）
 	var cur := _h_to_map(model.height)
 	var yy := MAP_BOT - 2.0
 	while yy >= cur:
 		var k := (MAP_BOT - yy) / (MAP_BOT - MAP_TOP)
-		draw_rect(Rect2(bx + 1.0, yy, bw - 2.0, 2), C_ORANGE.lerp(C_GOLD, k))
+		_px(Rect2(bx + 1.0, yy, bw - 2.0, 2), C_ORANGE.lerp(C_GOLD, k))
 		yy -= 2.0
 	# 自己ベストの高さ
 	if best[difficulty] > 0 and best[difficulty] < int(ThreadModel.GOAL):
 		var by := _h_to_map(float(best[difficulty]))
-		draw_rect(Rect2(bx - 2.0, by, bw + 4.0, 1), Color(C_WHITE, 0.7))
+		_px(Rect2(bx - 2.0, by, bw + 4.0, 1), Color(C_WHITE, 0.7))
 	# 叫べば届く高さ
 	if model.can_shout():
 		var jy := _h_to_map(model.height + model.jump_height())
-		draw_rect(Rect2(bx + 1.0, jy, bw - 2.0, cur - jy), Color(C_CYAN, 0.35 + 0.15 * sin(t * 8.0)))
-		draw_rect(Rect2(bx - 2.0, jy, bw + 4.0, 1), C_CYAN)
+		_px(Rect2(bx + 1.0, jy, bw - 2.0, cur - jy), Color(C_CYAN, 0.35 + 0.15 * sin(t * 8.0)))
+		_px(Rect2(bx - 2.0, jy, bw + 4.0, 1), C_CYAN)
 	# マグマ: 波打つ上端
 	if model.lava_h > 0.0:
 		var lv := _h_to_map(model.lava_h)
-		draw_rect(Rect2(bx + 1.0, lv, bw - 2.0, MAP_BOT - lv), C_RED)
+		_px(Rect2(bx + 1.0, lv, bw - 2.0, MAP_BOT - lv), C_RED)
 		for i in range(int(bw) - 2):
 			var wy := lv + roundf(sin(t * 6.0 + i * 1.3))
-			draw_rect(Rect2(bx + 1.0 + i, wy - 1.0, 1, 2), C_YELLOW if (i + int(t * 10.0)) % 3 == 0 else C_ORANGE)
+			_px(Rect2(bx + 1.0 + i, wy - 1.0, 1, 2), C_YELLOW if (i + int(t * 10.0)) % 3 == 0 else C_ORANGE)
 		if model.height - model.lava_h < 15.0 and fmod(t, 0.3) < 0.15:   # 迫ると枠が赤く点滅
-			draw_rect(Rect2(bx - 1.0, MAP_TOP - 1.0, 1, MAP_BOT - MAP_TOP + 2.0), C_RED)
-			draw_rect(Rect2(bx + bw, MAP_TOP - 1.0, 1, MAP_BOT - MAP_TOP + 2.0), C_RED)
+			_px(Rect2(bx - 1.0, MAP_TOP - 1.0, 1, MAP_BOT - MAP_TOP + 2.0), C_RED)
+			_px(Rect2(bx + bw, MAP_TOP - 1.0, 1, MAP_BOT - MAP_TOP + 2.0), C_RED)
 	# カンダタの顔
-	_spr(SPR_HEAD, Vector2(cx, cur), {"h": C_HAIR, "s": C_SKIN, "k": C_BLACK}, false, 2)
-	_spr(SPR_FIRE[int(t * 6.0) % 2], Vector2(cx, MAP_BOT + 14), {"y": C_YELLOW, "o": C_ORANGE, "w": C_RED}, false, 1)
+	_spr(SPR_HEAD, Vector2(cx, cur), {"h": C_HAIR, "s": C_SKIN, "k": C_BLACK}, false, 3)
 
 
 func _draw_hud() -> void:
@@ -1847,7 +1876,7 @@ func _shadow_label(p: Vector2, txt: String, col: Color, align := HORIZONTAL_ALIG
 
 func _draw_title() -> void:
 	# PICO-8 っぽく: 黒地に、登場するものを色とりどりに並べる
-	draw_rect(Rect2(0, 0, W, H), P_BLACK)
+	_px(Rect2(0, 0, W, H), P_BLACK)
 	var cx := W * 0.5
 	# またたく星（火の粉）
 	for i in range(40):
@@ -1856,18 +1885,18 @@ func _draw_title() -> void:
 		var tw := fmod(t * 1.5 + i * 0.37, 1.0)
 		if tw < 0.5:
 			var sc2: Color = [P_RED, P_ORANGE, P_YELLOW, P_PINK, P_WHITE][i % 5]
-			draw_rect(Rect2(sx, sy, 2, 2), sc2)
+			_px(Rect2(sx, sy, 2, 2), sc2)
 			if tw < 0.15:   # きらっ
-				draw_rect(Rect2(sx - 2, sy, 6, 2), sc2)
-				draw_rect(Rect2(sx, sy - 2, 2, 6), sc2)
-	draw_line(Vector2(cx, 0), Vector2(cx, 150), P_WHITE, 2.0)   # 糸（文字の後ろ）
-	draw_rect(Rect2(cx - 150, 64, 300, 60), P_BLACK)
+				_px(Rect2(sx - 2, sy, 6, 2), sc2)
+				_px(Rect2(sx, sy - 2, 2, 6), sc2)
+	draw_line(Vector2(cx, 0), Vector2(cx, 150), P_WHITE, 3.0)   # 糸（文字の後ろ）
+	_px(Rect2(cx - 150, 64, 300, 60), P_BLACK)
 	_label(Vector2(cx, 92), "パワーカンダタ（仮）", 32, P_YELLOW, HORIZONTAL_ALIGNMENT_CENTER)
 	_label(Vector2(cx, 116), "蜘蛛の糸から、極楽へ", 16, P_PINK, HORIZONTAL_ALIGNMENT_CENTER)
 	# 蜘蛛と、ぶら下がるカンダタ
-	_spr(SPR_SPIDER, Vector2(cx, 132 + roundf(sin(t * 2.0) * 2.0)), {"l": P_WHITE, "b": P_DGREY, "e": P_RED}, false, 2)
+	_spr(SPR_SPIDER, Vector2(cx, 132 + roundf(sin(t * 2.0) * 2.0)), {"l": P_WHITE, "b": P_DGREY, "e": P_RED}, false, 3)
 	var bob := roundf(sin(t * 3.0) * 2.0)
-	_spr(SPR_KANDATA, Vector2(cx, 176 + bob), {"s": C_SKIN, "h": C_HAIR, "k": C_BLACK, "m": C_RED, "c": C_CLOTH}, false, 4)
+	_spr(SPR_KANDATA, Vector2(cx, 176 + bob), {"s": C_SKIN, "h": C_HAIR, "k": C_BLACK, "m": C_RED, "c": C_CLOTH}, false, 6)
 	# 登場するものたち
 	var hop := func(i: int) -> float: return -roundf(absf(sin(t * 4.0 + i)) * 4.0)
 	_spr(SPR_ONI_UP, Vector2(cx - 210, 190 + hop.call(0)), ONI_PAL, false, 3)
@@ -1899,7 +1928,7 @@ func _draw_result() -> void:
 		# 景色を隠さないよう、上に小さく
 		var a := clampf((phase_t - 1.8) / 0.5, 0.0, 1.0)
 		var wx := W * 0.5
-		draw_rect(Rect2(wx - 160, 24, 320, 196), Color(C_BLACK, 0.5 * a))
+		_px(Rect2(wx - 160, 24, 320, 196), Color(C_BLACK, 0.5 * a))
 		_label(Vector2(wx, 58), "極楽に到達！", 32, Color(C_YELLOW, a), HORIZONTAL_ALIGNMENT_CENTER)
 		_label(Vector2(wx, 82), "TIME %.1f   RANK %s" % [model.elapsed, _rank(model.elapsed)], 16, Color(C_WHITE, a), HORIZONTAL_ALIGNMENT_CENTER)
 		# 上位10件（左に1〜5位、右に6〜10位）。今回のタイムは点滅
@@ -1919,7 +1948,7 @@ func _draw_result() -> void:
 		if fmod(t, 1.0) < 0.6 and a >= 1.0:
 			_label(Vector2(wx, 346), "PUSH START", 16, C_WHITE, HORIZONTAL_ALIGNMENT_CENTER)
 		return
-	draw_rect(Rect2(0, 0, FIELD_W, H), Color(C_BLACK, 0.8))
+	_px(Rect2(0, 0, FIELD_W, H), Color(C_BLACK, 0.8))
 	var cx := FIELD_W * 0.5
 	_label(Vector2(cx, 120), "GAME OVER", 32, C_RED, HORIZONTAL_ALIGNMENT_CENTER)
 	_label(Vector2(cx, 172), "%d/%dm" % [int(model.height), int(ThreadModel.GOAL)], 32, C_GOLD, HORIZONTAL_ALIGNMENT_CENTER)
@@ -1933,11 +1962,11 @@ func _draw_result() -> void:
 
 
 func _draw_panel() -> void:
-	draw_rect(Rect2(0, 0, W, H), Color(C_BLACK, 0.8))
+	_px(Rect2(0, 0, W, H), Color(C_BLACK, 0.8))
 	var px := 40.0
 	var py := 34.0
-	draw_rect(Rect2(px - 16, py - 26, 592, 336), P_BLACK)
-	draw_rect(Rect2(px - 16, py - 26, 592, 336), C_GOLD, false, 1.0)
+	_px(Rect2(px - 16, py - 26, 592, 336), P_BLACK)
+	draw_rect(Rect2(px - 16, py - 26, 592, 336), C_GOLD, false, 3.0)
 	_label(Vector2(px, py), "調整パネル（一時停止中）", 16, C_GOLD)
 	var keys: Array = ThreadModel.TUNE_ORDER
 	for i in range(keys.size()):
@@ -1945,7 +1974,7 @@ func _draw_panel() -> void:
 		var y := py + 24.0 + i * 18.0
 		var sel := i == panel_sel
 		if sel:
-			draw_rect(Rect2(px - 8, y - 14, 576, 18), Color(C_GOLD, 0.2))
+			_px(Rect2(px - 8, y - 14, 576, 18), Color(C_GOLD, 0.2))
 		var changed: bool = not is_equal_approx(tuning[k], ThreadModel.DEFAULTS[k])
 		_label(Vector2(px, y), ("＞" if sel else "　") + ThreadModel.TUNE_LABEL[k], 16, C_WHITE if sel else Color(C_WHITE, 0.75))
 		var val := _fmt(tuning[k])
@@ -1967,7 +1996,8 @@ func _fmt(v: float) -> String:
 
 
 func _label(pos: Vector2, text: String, size: int, col: Color, align := HORIZONTAL_ALIGNMENT_LEFT) -> void:
-	# 右寄せ・中央寄せは pos.x を基準に。32 は 16 のドット文字を 2 倍に拡大して描く
+	# 文字は格子にそろえると読めなくなるので、いちばん上の層（16色フィルタの上）にくっきり描く。
+	# ここでは描く内容を貯めておき、_draw_text_layer でまとめて描く
 	var sc := 2.0 if size >= 32 else 1.0
 	var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x * sc
 	var p := pos.round()
@@ -1975,17 +2005,28 @@ func _label(pos: Vector2, text: String, size: int, col: Color, align := HORIZONT
 		p.x -= tw
 	elif align == HORIZONTAL_ALIGNMENT_CENTER:
 		p.x -= roundf(tw * 0.5)
-	if sc > 1.0:
-		draw_set_transform(draw_off, 0.0, Vector2(sc, sc))
-		var lp := (p / sc).round()
-		draw_string(font, lp + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(C_BLACK, col.a))
-		draw_string(font, lp, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
-		draw_set_transform(draw_off)
-	else:
-		draw_string(font, p + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(C_BLACK, col.a))
-		draw_string(font, p, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
+	text_queue.append([p, text, sc, col, draw_off])
+
+
+func _draw_text_layer() -> void:
+	for q in text_queue:
+		var p: Vector2 = q[0]
+		var text: String = q[1]
+		var sc: float = q[2]
+		var col: Color = q[3]
+		var off: Vector2 = q[4]
+		if sc > 1.0:
+			text_layer.draw_set_transform(off, 0.0, Vector2(sc, sc))
+			var lp := (p / sc).round()
+			text_layer.draw_string(font, lp + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(C_BLACK, col.a))
+			text_layer.draw_string(font, lp, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
+		else:
+			text_layer.draw_set_transform(off)
+			text_layer.draw_string(font, p + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(C_BLACK, col.a))
+			text_layer.draw_string(font, p, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
+	text_layer.draw_set_transform(Vector2.ZERO)
 
 
 func _pbar(r: Rect2, ratio: float, col: Color) -> void:
-	draw_rect(r, C_DARK)
-	draw_rect(Rect2(r.position, Vector2(roundf(r.size.x * clampf(ratio, 0.0, 1.0)), r.size.y)), col)
+	_px(r, C_DARK)
+	_px(Rect2(r.position, Vector2(roundf(r.size.x * clampf(ratio, 0.0, 1.0)), r.size.y)), col)
