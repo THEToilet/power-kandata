@@ -61,8 +61,8 @@ const SPR_KANDATA := [
 	"..ssssssss..",
 	"...ssmmss...",
 	"..cccccccc..",
-	".scccccccs..",
-	".s.cccccc.s.",
+	"..cccccccc..",
+	"...cccccc...",
 	"...cc..cc...",
 	"...ss..ss...",
 	"...ss..ss...",
@@ -86,6 +86,25 @@ const SPR_KANDATA_JUMP := [
 	".ss......ss.",
 	"............",
 ]
+# 登りのモーション: 左手を上へ伸ばし、右手は腰で糸を握る。右足を引き上げる（左右反転で逆の手足）
+const SPR_KANDATA_REACH := [
+	".....ss.....",
+	"....s.......",
+	"...shhhhh...",
+	"..shhhhhhh..",
+	"..hhhhhhhh..",
+	"..hssssssh..",
+	"..sksssksh..",
+	"..ssssssss..",
+	"...ssmmss...",
+	"..cccccccc..",
+	"..ccccccccs.",
+	"...cccccc.s.",
+	"...cc..ccs..",
+	"..sss..ss...",
+	"........ss..",
+	"........sss.",
+]
 # 罪人: カンダタと同じ立場の人間。顔つき・体つきは同じで、髪と腰布の色だけが違う
 const SPR_GHOST := [
 	"s.........",
@@ -97,7 +116,7 @@ const SPR_GHOST := [
 	"..sssssss.",
 	"...smms...",
 	"..ccccccc.",
-	".sccccccs.",
+	"..ccccccs.",
 	"...cc.cc..",
 	"...s...s..",
 	"..ss...ss.",
@@ -294,6 +313,10 @@ var popups: Array = []           # [text, world_h, x, age, color]
 var fx_shout := 0.0
 var stomp_fx := 0.0              # 踏みつけの衝撃波
 var ring_nope := 0.0
+var anim_h := 0.0                # 登りモーション用: 前のフレームの高さ
+var climb_phase := 0.0           # 登った距離で進むモーションの位相
+var climb_moving := 0.0          # 登っている最中なら 1（少し余韻を残す）
+var last_climb_frame := 0
 var tips_seen := {}              # 一度出した案内（このセッション中は二度と出さない）
 var tip_queue: Array = []
 var tip_text := ""
@@ -607,6 +630,14 @@ func _process(delta: float) -> void:
 	cam_h = clampf(cam_h, model.height - (PLAYER_SY - 30.0) / PPM, model.height + (H - 40.0 - PLAYER_SY) / PPM)
 	_update_particles(delta)
 	ring_nope = maxf(0.0, ring_nope - delta)
+	# 登りモーション: 実際に登った距離で手足を動かす（止まれば止まる）
+	var dh := model.height - anim_h
+	anim_h = model.height
+	if model.state == ThreadModel.State.CLIMBING and dh > 0.0 and dh < 2.0:
+		climb_phase += dh * 0.75
+		climb_moving = 0.15
+	else:
+		climb_moving = maxf(0.0, climb_moving - delta)
 	if phase == Phase.PLAY and model.height - model.lava_h < 15.0:
 		shake = maxf(shake, 0.12)   # マグマが足元に迫ると地鳴り
 	if phase == Phase.PLAY:
@@ -1501,8 +1532,26 @@ func _draw_kandata(p: Vector2) -> void:
 	if model.stun_left > 0.0:
 		pal["s"] = Color8(250, 140, 120)
 	var lean := clampf(model.vx * 0.01, -4.0, 4.0)
-	var spr := SPR_KANDATA_JUMP if model.state == ThreadModel.State.AIR else SPR_KANDATA
-	_spr(spr, Vector2(p.x + roundf(lean), p.y), pal)
+	if model.state == ThreadModel.State.AIR:
+		_spr(SPR_KANDATA_JUMP, Vector2(p.x + roundf(lean), p.y), pal)
+		return
+	if model.state == ThreadModel.State.CLIMBING and climb_moving > 0.0:
+		# 手を交互に伸ばす4コマ: 左手上 → 両手 → 右手上 → 両手。伸ばした瞬間に体が持ち上がる
+		var fr := int(floorf(climb_phase)) % 4
+		var bob := -2.0 if fr % 2 == 0 else 0.0
+		if fr % 2 == 0:
+			_spr(SPR_KANDATA_REACH, Vector2(p.x + roundf(lean), p.y + bob), pal, fr == 2)
+		else:
+			_spr(SPR_KANDATA, Vector2(p.x + roundf(lean), p.y + bob), pal)
+		if fr != last_climb_frame:
+			last_climb_frame = fr
+			if fr % 2 == 0:   # 糸をつかみ直した手元から、繊維がこぼれる
+				var hx := p.x + roundf(lean) + (-1.0 if fr == 0 else 1.0)
+				_part(Vector2(hx, p.y - 16.0), Vector2(randf_range(-20, 20), randf_range(10, 30)), 0.3, Color(C_WHITE, 0.6), 1.0, 60.0)
+		return
+	# 止まっているとき: ゆっくり息をする（2px 上下）
+	var breathe := -2.0 if fmod(t, 1.2) < 0.6 else 0.0
+	_spr(SPR_KANDATA, Vector2(p.x + roundf(lean), p.y + breathe), pal)
 
 
 func _draw_map() -> void:
