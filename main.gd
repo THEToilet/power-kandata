@@ -12,8 +12,8 @@ const PLAYER_SY := 168.0     # カンダタを置く高さ
 const PPM := 3.6             # 1m あたりのドット
 const XS := 0.85              # モデルの横位置（px@1280）→ 画面ドット
 const GHOST_GAP := 14.0
-const G := 3.0               # 画面全体のドット1粒の大きさ。すべての要素をこの格子にそろえる
-const SC := 3                # キャラと障害物のドット1粒の大きさ（PICO-8 っぽく大きめ）
+const G := 2.0               # 画面全体のドット1粒の大きさ。すべての要素をこの格子にそろえる
+const SC := 2                # キャラと障害物のドット1粒の大きさ（PICO-8 っぽく大きめ）
 const MAP_X := 625.0         # 高度マップ（縦の再生バー）
 const MAP_TOP := 34.0
 const MAP_BOT := 330.0
@@ -73,157 +73,221 @@ const C_HILL_D := P_DGREEN
 
 # ---- ドット絵（1文字 = 1ドット）
 const SPR_KANDATA := [
-	".....ss.....",
-	"....s..s....",
-	"...shhhhs...",
-	"..hhhhhhhh..",
-	"..hhhhhhhh..",
-	"..hssssssh..",
-	"..sksssksh..",
-	"..ssssssss..",
-	"...ssmmss...",
-	"..cccccccc..",
-	"..cccccccc..",
-	"...cccccc...",
-	"...cc..cc...",
-	"...ss..ss...",
-	"...ss..ss...",
-	"..sss..sss..",
+	"........ss........",
+	".......ssss.......",
+	"......s....s......",
+	"......s....s......",
+	".....s.hhhh.s.....",
+	"....s.hhhhhhs.....",
+	"....shhhhhhhhs....",
+	"...shhhhhhhhhhs...",
+	"...shshhsshhshs...",
+	"..s.hskksskksh.s..",
+	"..s..skksskks..s..",
+	"..s..sssddsss..s..",
+	"..s..hhmmmmhh.s...",
+	"...s.shhhhhhs.s...",
+	"...ssssssssssss...",
+	"...sccccccccccs...",
+	"...cccecccccccc...",
+	"...cccccccceccc...",
+	"...cccccccccccc...",
+	"....mmmmmmmmmm....",
+	".....cccccccc.....",
+	".....ss....ss.....",
+	".....ss....ss.....",
+	"....sss....sss....",
 ]
 const SPR_KANDATA_JUMP := [
-	"..s......s..",
-	"..s......s..",
-	"..sh....hs..",
-	"..hhhhhhhh..",
-	"..hhhhhhhh..",
-	"..hssssssh..",
-	"..sksssksh..",
-	"..ssssssss..",
-	"...ssmmss...",
-	"..cccccccc..",
-	"..cccccccc..",
-	"..cccccccc..",
-	"...cc..cc...",
-	"..ss....ss..",
-	".ss......ss.",
-	"............",
+	"..s............s..",
+	"..s............s..",
+	"..s............s..",
+	"..s............s..",
+	"..s....hhhh.....s.",
+	".s....hhhhhh....s.",
+	".s...hhhhhhhh...s.",
+	".s..hhhhhhhhhh..s.",
+	".s..hshhsshhsh..s.",
+	".s..hskksskksh..s.",
+	"..s..skksskks..s..",
+	"..s..sssddsss..s..",
+	"..s..hhmmmmhh..s..",
+	"..s..shhhhhhs..s..",
+	"...ssssssssssss...",
+	"...sccccccccccs...",
+	"...cccecccccccc...",
+	"...cccccccceccc...",
+	"...cccccccccccc...",
+	"....mmmmmmmmmm....",
+	".....cccccccc.....",
+	"....ss......ss....",
+	"....ss......ss....",
+	"...ss........ss...",
 ]
 # 登りのモーション: 左手を上へ伸ばし、右手は腰で糸を握る。右足を引き上げる（左右反転で逆の手足）
 const SPR_KANDATA_REACH := [
-	".....ss.....",
-	"....s.......",
-	"...shhhhh...",
-	"..shhhhhhh..",
-	"..hhhhhhhh..",
-	"..hssssssh..",
-	"..sksssksh..",
-	"..ssssssss..",
-	"...ssmmss...",
-	"..cccccccc..",
-	"..ccccccccs.",
-	"...cccccc.s.",
-	"...cc..ccs..",
-	"..sss..ss...",
-	"........ss..",
-	"........sss.",
+	"........ss........",
+	".......sss........",
+	"......s...........",
+	"......s...........",
+	".....s.hhhh.......",
+	"....s.hhhhhh......",
+	"....shhhhhhhh.....",
+	"...shhhhhhhhhh....",
+	"...shshhsshhsh....",
+	"..s.hskksskksh....",
+	"..s..skksskks.....",
+	"..s..sssddsss.....",
+	"..s..hhmmmmhh.....",
+	"...s.shhhhhhs.....",
+	"...sssssssssss....",
+	"...sccccccccccs...",
+	"...cccecccccccs...",
+	"...ccccccccecccs..",
+	"...cccccccccccss..",
+	"....mmmmmmmmms....",
+	"....sssccssss.....",
+	"...ss....ssss.....",
+	"...........ss.....",
+	"...........sss....",
 ]
 # 罪人: カンダタと同じ立場の人間。顔つき・体つきは同じで、髪と腰布の色だけが違う
 const SPR_GHOST := [
-	"s.........",
-	".s.hhhh...",
-	"..hhhhhhh.",
-	"..hhhhhhh.",
-	"..hsssssh.",
-	"..skssks..",
-	"..sssssss.",
-	"...smms...",
-	"..ccccccc.",
-	"..ccccccs.",
-	"...cc.cc..",
-	"...s...s..",
-	"..ss...ss.",
+	".s.............",
+	".s.............",
+	".s..hhhhhh.....",
+	"s..hhhhhhhh....",
+	"s.hhhhhhhhhh...",
+	"s.hshhsshhsh...",
+	"s.hskksskksh...",
+	"s..skksskks....",
+	"s..sssddsss....",
+	"s..ssmmmmss....",
+	".s.ssssssss....",
+	".sssssssssss...",
+	".sccccccccccs..",
+	".cccecccccccs..",
+	".ccccccccecccs.",
+	".ccccccccccccs.",
+	"..mmmmmmmmmm...",
+	"...cccccccc....",
+	"...ss....ss....",
+	"...ss....ss....",
 ]
 const SPR_GHOST_RUN := [
-	"s.........",
-	".s..hhh...",
-	"..shhhhh..",
-	"..hhhhhhh.",
-	"..hsssssh.",
-	"..skssks..",
-	"..sssssss.",
-	"...smms...",
-	"..ccccccc.",
-	"..ccccccs.",
-	"...ccccc..",
-	"..s....s..",
-	".ss.....ss",
+	".s.............",
+	".s.............",
+	".s..hhhhhh.....",
+	"s..hhhhhhhh....",
+	"s.hhhhhhhhhh...",
+	"s.hshhsshhsh...",
+	"s.hskksskksh...",
+	"s..skksskks....",
+	"s..sssddsss....",
+	"s..ssmmmmss....",
+	".s.ssssssss....",
+	".sssssssssss...",
+	".sccccccccccs..",
+	".cccecccccccs..",
+	".ccccccccecccs.",
+	".ccccccccccccs.",
+	"..mmmmmmmmmm...",
+	"...cccccccc....",
+	"..ss......ss...",
+	".ss.......sss..",
 ]
 # 鬼: 崖の岩棚に現れて、岩を投げてくる。赤い肌・角・虎の腰布
-const SPR_ONI_UP := [   # 振りかぶり（両手で岩を頭上に）
-	"r.y......y.r",
-	"r.yy....yy.r",
-	"rr.hhhhhh.rr",
-	".rhhhhhhhhr.",
-	"..hrrrrrrh..",
-	"..rwkrrkwr..",
-	"..rrrrrrrr..",
-	"...rwwwwr...",
-	"..rrrrrrrr..",
-	"..rrddrrrr..",
-	"..rrrrrrrr..",
-	"...tbtbtt...",
-	"...tbtbtb...",
-	"...rr..rr...",
-	"..rrr..rrr..",
+const SPR_ONI_UP := [
+	"....y........y....",
+	"....y........y....",
+	".....y......y.....",
+	".....yhhhhhhy.....",
+	".....yhhhhhhy.....",
+	".....hhhhhhhh.....",
+	".r..rrrrrrrrrr..r.",
+	".r..rkkkrrkkkr..r.",
+	"..r.rrwwrrwwrr.r..",
+	"..r.rrwkrrkwrr.r..",
+	"..r.rrwrrrrwrr.r..",
+	"..r.rrkkkkkkrr.r..",
+	"...rrrrrrrrrrrr...",
+	"...rrrrrrrrrrrr...",
+	"...rrddddddddrr...",
+	"...rrrrrrrrrrrr...",
+	"...rrrrrrrrrrrr...",
+	"...rrrrrrrrrrrr...",
+	"....bttbttbttb....",
+	"....tbttbttbttb...",
+	".....rr....rr.....",
+	"....rrr....rrr....",
 ]
-const SPR_ONI_THROW := [   # 投げた（右へ腕を伸ばす）
-	"..y......y..",
-	"..yy....yy..",
-	"...hhhhhh...",
-	"..hhhhhhhh..",
-	"..hrrrrrrh..",
-	"..rwkrrkwr..",
-	"..rrrrrrrr..",
-	"...rwwwwr...",
-	"..rrrrrrrrrr",
-	".rrrddrrr...",
-	"rr.rrrrrr...",
-	"r..tbtbtt...",
-	"...tbtbtb...",
-	"...rr..rr...",
-	"..rrr..rrr..",
+const SPR_ONI_THROW := [
+	"....y........y....",
+	"....y........y....",
+	".....y......y.....",
+	".....yhhhhhhy.....",
+	".....yhhhhhhy.....",
+	".....hhhhhhhh.....",
+	"....rrrrrrrrrr....",
+	"....rkkkrrkkkr....",
+	"....rrwwrrwwrr....",
+	"....rrwkrrkwrr....",
+	"....rrwrrrrwrr....",
+	"....rrkkkkkkrr...r",
+	"....rrrrrrrrrr...r",
+	"...rrrrrrrrrrrrrr.",
+	"...rrddddddddrr...",
+	"..rrrrrrrrrrrrr...",
+	"..rrrrrrrrrrrrr...",
+	".r.rrrrrrrrrrrr...",
+	"....bttbttbttb....",
+	"....tbttbttbttb...",
+	".....rr....rr.....",
+	"....rrr....rrr....",
 ]
 const ONI_PAL := {"r": P_RED, "d": P_DPURP, "y": P_WHITE, "h": P_BLACK,
 		"w": P_WHITE, "k": P_BLACK, "t": P_YELLOW, "b": P_BLACK}
 const GHOST_HAIR := [P_BLACK, P_DBLUE, P_BROWN, P_DGREY]
 const SPR_FIRE := [
 	[
-		"......y.....",
-		".....yy.....",
-		"....yyo.....",
-		"...yyooo....",
-		"...yowwo..o.",
-		"..yowwwwoo..",
-		"..owwwwwwo..",
-		".oowwwwwwoo.",
-		".oowwwwwwoo.",
-		"..oowwwwoo..",
-		"...oooooo...",
-		".....oo.....",
+		"........o.......",
+		".......oo.......",
+		".......oyo......",
+		"......oyyo...o..",
+		"......oyyo..oo..",
+		".....oyyyyo.oo..",
+		"....oyywyyooyo..",
+		"....oywwwyyyo...",
+		"...oyywwwwyyo...",
+		"..oyywwwwwyyo...",
+		"..oywwwwwwwyyo..",
+		".oyywwwwwwwwyo..",
+		".oyywwwwwwwwyo..",
+		".oyywwwwwwwyyo..",
+		"..oyywwwwwyyo...",
+		"...ooyyyyyyoo...",
+		".....oooooo.....",
+		"................",
 	],
 	[
-		".....y......",
-		".....yy.....",
-		".....oyy....",
-		"....oooyy...",
-		".o..owwoy...",
-		"..oowwwwoy..",
-		"..owwwwwwo..",
-		".oowwwwwwoo.",
-		".oowwwwwwoo.",
-		"..oowwwwoo..",
-		"...oooooo...",
-		".....oo.....",
+		"......o.........",
+		"......oo........",
+		".....oyo........",
+		"..o..oyyo.......",
+		"..oo.oyyo.......",
+		"..oo.oyyyyo.....",
+		"..oyooyywyyo....",
+		"...oyyywwwyo....",
+		"...oyywwwwyyo...",
+		"..oyywwwwwyyo...",
+		"..oywwwwwwwyyo..",
+		".oyywwwwwwwwyo..",
+		".oyywwwwwwwwyo..",
+		".oyywwwwwwwyyo..",
+		"..oyywwwwwyyo...",
+		"...ooyyyyyyoo...",
+		".....oooooo.....",
+		"................",
 	],
 ]
 # 背景の地獄の炎の文様（絵巻の炎をドットで）
@@ -260,32 +324,43 @@ const SPR_HELLFLAME := [
 # 鬼の投げる岩（2コマで回る）
 const SPR_ROCK := [
 	[
-		"...kkkkk...",
-		"..klllddk..",
-		".kllldddk..",
-		"kllddddddk.",
-		"kldddddddk.",
-		"kdddddddddk",
-		"kddkddddddk",
-		".kdddddddk.",
-		".kddddkddk.",
-		"..kdddddk..",
-		"...kkkkk...",
+		"................",
+		".....kkkkkk.....",
+		"...kkddddddkk...",
+		"..kdlllddddddk..",
+		".kkllddddddddkk.",
+		".kdlldkkddddddk.",
+		".kddddddddddddk.",
+		"kddddddddddddddk",
+		"kdddddddddkdkddk",
+		".kddddddddddddk.",
+		".kddddkkddddddk.",
+		".kkddddddddddkk.",
+		"..kddddddddddk..",
+		"...kkddddddkk...",
+		".....kkkkkk.....",
+		"................",
 	],
 	[
-		"...kkkkk...",
-		"..kddddlk..",
-		".kdddddllk.",
-		"kddddddlllk",
-		"kdkdddddddk",
-		"kdddddddddk",
-		"kdddddddkdk",
-		".kdddddddk.",
-		".kddkddddk.",
-		"..kdddddk..",
-		"...kkkkk...",
+		"................",
+		".....kkkkkk.....",
+		"...kkddddddkk...",
+		"..kdlllddddddk..",
+		".kkllddddddddkk.",
+		".kdlldddddddddk.",
+		".kdddkkdddkkddk.",
+		"kddddddddddddddk",
+		"kddddddddddddddk",
+		".kddddddddddddk.",
+		".kddddddkdddddk.",
+		".kkddddddddddkk.",
+		"..kddddddddddk..",
+		"...kkddddddkk...",
+		".....kkkkkk.....",
+		"................",
 	],
 ]
+const DEF_PAL := {"d": P_PINK, "e": P_DPURP}   # 鼻の影・服の継ぎ目（パレット未指定のとき）
 const ROCK_PAL := {"k": P_BLACK, "d": P_DGREY, "l": P_LGREY}
 const SPR_LOTUS := [
 	"...y...",
@@ -306,60 +381,97 @@ const SPR_CLOUD := [
 	"..ssssssssssssssssssss..",
 ]
 const SPR_SPIDER := [
-	"l..l.....l..l",
-	".l..l...l..l.",
-	"..l.lbbbl.l..",
-	"llllbbbbbllll",
-	"....bebeb....",
-	"llllbbbbbllll",
-	"..l.lbbbl.l..",
-	".l...bbb...l.",
-	"l.....b.....l",
+	"..l...........l..",
+	"...l..l...l..l...",
+	"....l..lbl..l....",
+	"l....llbbbll....l",
+	".l....bbbbb....l.",
+	"..llllbebebllll..",
+	"......bbbbb......",
+	"..llllbbbbbllll..",
+	".l...lbbbbbl...l.",
+	"l...l..bbb..l...l",
+	"...l...bbb...l...",
+	"..l.....b.....l..",
+	".................",
 ]
 const SPR_LOTUS_FLOWER := [
-	".....P.....",
-	"...p.P.p...",
-	"..pPpPpPp..",
-	".pPPPyPPPp.",
-	"..pPPPPPp..",
-	"ggggggggggg",
-	".ggggggggg.",
+	".......P........",
+	"......PPP.......",
+	"...P..PPP..P....",
+	"...PP.PpP.PP....",
+	"P..PPPPpPPPP..P.",
+	"PP.PpPPpPPpP.PP.",
+	".PPPpPyyyPpPPP..",
+	"..PPPPyyyPPPP...",
+	"...PPPPPPPPP....",
+	"gggggggggggggggg",
+	"..gggggggggggg..",
 ]
 const SPR_LILY_PAD := [
-	"..gggg.gggg..",
-	".gggggggggggg",
-	"ggggGggggGggg",
-	".ggggggggggg.",
+	"....gggggg.ggggg....",
+	".ggggggggg.gggggggg.",
+	"gggggggggg.ggggggggg",
+	"gGgggggGgg.gggggGggg",
+	".gggGggggggggGgggggG",
+	"....gggggggggggg....",
+]
+const SPR_BIG_PAD := [
+	"...........ggggggggg.gggggggg...........",
+	"......gggggggggggggg.ggggggggggggg......",
+	"...ggggggggggggggggg.gggggggggggggggg...",
+	".ggggggggggggggggggg.gggggggggggggggggg.",
+	"gggggggggggggggggggg.ggggggggggggggggggg",
+	"gggggggggggGgggggGgg.gggggGggggggggggggg",
+	".gggggggggggggGggggggggGgggggGggggggggg.",
+	"...gggggggggggggggggggggggggggggggggg...",
+	"......gggggggggggggggggggggggggggg......",
+	"...........gggggggggggggggggg...........",
 ]
 const SPR_BUDDHA := [
-	"........hh........",
-	".......hhhh.......",
-	".....hhhhhhhh.....",
-	"....hhhhhhhhhh....",
-	"....hhhhhhhhhh....",
-	"....ssssswssss....",
-	"...sskkssssskks...",
-	"...ssssssssssss...",
-	"...s.sssssssss.s..",
-	"...s..ssmmmss..s..",
-	".......ssssss.....",
-	".....rrrsssrrr....",
-	"...rrrrrrssrrrrr..",
-	"..rrrrrrrrrrrrRr..",
-	"..rrRrrrrrrrrrRr..",
-	".rrrRrrrrrrrrrRrr.",
-	".rrrRrrsssssrrRrr.",
-	".rrrRrrsssssrrRrr.",
-	"rrrrrrrrrrrrrrrrrr",
-	"rRRRRRRRRRRRRRRRRr",
-	".rrrrrrrrrrrrrrrr.",
+	".........hhhhhhhhh.........",
+	".........hhhhhhhhh.........",
+	"........khkhkhkhkhk........",
+	"........hhhhhhhhhhh........",
+	"........hhhhhhhhhhh........",
+	"........ssssswsssss........",
+	"......sssssssssssssss......",
+	"......ssskkkssskkksss......",
+	"......sssssssssssssss......",
+	"......sssssssksssssss......",
+	"......sssssssssssssss......",
+	"......ssssssmmmssssss......",
+	"......sssssssssssssss......",
+	".........sssssssss.........",
+	"..........sssssss..........",
+	"....rrrrrrrssssssrrrrrr....",
+	"....RrrrrrrssssssrrrrrR....",
+	"....rRrrrrrssssssrrrrRr....",
+	"....rRrrrrrssssssrrrrRr....",
+	"....rrRrrrrssssssrrrRrr....",
+	"....rrrRrrrrrrrrrrrrRrr....",
+	"....rrrrRrrrrrrrrrrRrrr....",
+	"....rrrrRsssssssssRrrrr....",
+	"....rrrrrssRRRRRssRrrrr....",
+	"....rrrrrsssssssssrrrrr....",
+	"....rrrrrrRrrrrrrrrrrrr....",
+	".rrrrrrrrrrrrrrrrrrrrrrrrr.",
+	".rrRRRRRRRRRRrrrrrrrrrrrrr.",
+	".rrrrrrrrrrrrRRRRRRRRRRRrr.",
+	".rrrrrrrrrrrrrrrrrrrrrrrrr.",
+	".RRRRRRRRRRRRRRRRRRRRRRRRR.",
+	".RRRRRRRRRRRRRRRRRRRRRRRRR.",
 ]
 const SPR_PEDESTAL := [
-	"..p..p..p..p..p..p..p..",
-	".pPp.pPppPp.pPppPp.pPp.",
-	"pPPPpPPPPPPpPPPPPPpPPPp",
-	"ppppppppppppppppppppppp",
-	".ggggggggggggggggggggg.",
+	"..P....P....P....P....P....P....P....P..",
+	".PPP..PPP..PPP..PPP..PPP..PPP..PPP..PPP.",
+	"PPpPPPPpPPPPpPPPPpPPPPpPPPPpPPPPpPPPPpPP",
+	"pPPPppPPPppPPPppPPPppPPPppPPPppPPPppPPPp",
+	"pppppppppppppppppppppppppppppppppppppppp",
+	"pppppppppppppppppppppppppppppppppppppppp",
+	"pppppppppppppppppppppppppppppppppppppppp",
+	"..gggggggggggggggggggggggggggggggggggg..",
+	"....gggggggggggggggggggggggggggggggg....",
 ]
 const SPR_BIRD := [
 	"b...b",
@@ -367,12 +479,15 @@ const SPR_BIRD := [
 	"..b..",
 ]
 const SPR_HEAD := [
-	".hhhh.",
-	"hhhhhh",
-	"hssssh",
-	"skssks",
-	"ssssss",
-	".ssss.",
+	"..hhhhh..",
+	"..hhhhh..",
+	".hhhhhhh.",
+	".hsssssh.",
+	".skkskks.",
+	".skkskks.",
+	".sssssss.",
+	".sshhhss.",
+	".sssssss.",
 ]
 
 enum Phase { TITLE, PLAY, RESULT }
@@ -1103,7 +1218,7 @@ func _px(r: Rect2, col: Color) -> void:
 	draw_rect(Rect2(x0, y0, x1 - x0, y1 - y0), col)
 
 
-func _spr(rows: Array, pos: Vector2, pal: Dictionary, flip := false, sc := 3) -> void:
+func _spr(rows: Array, pos: Vector2, pal: Dictionary, flip := false, sc := 2) -> void:
 	# ドット絵を描く。pos はスプライトの中心、sc は 1 文字あたりのドット数（G の倍数）。左上を格子にそろえる
 	var h := rows.size()
 	var w: int = rows[0].length()
@@ -1113,8 +1228,12 @@ func _spr(rows: Array, pos: Vector2, pal: Dictionary, flip := false, sc := 3) ->
 		var row: String = rows[yy]
 		for xx in range(w):
 			var ch := row[w - 1 - xx] if flip else row[xx]
-			if ch != "." and pal.has(ch):
+			if ch == ".":
+				continue
+			if pal.has(ch):
 				draw_rect(Rect2(ox + xx * sc, oy + yy * sc, sc, sc), pal[ch])
+			elif DEF_PAL.has(ch):
+				draw_rect(Rect2(ox + xx * sc, oy + yy * sc, sc, sc), DEF_PAL[ch])
 
 
 func _draw_world() -> void:
@@ -1144,7 +1263,7 @@ func _draw_world() -> void:
 		draw_colored_polygon(PackedVector2Array([Vector2(sx - wid, base_y + 30), Vector2(sx - wid * 0.4, base_y - tall * 0.6),
 				tip, Vector2(sx + wid * 0.4, base_y - tall * 0.5), Vector2(sx + wid, base_y + 30)]), P_BLACK)
 		if hsh % 3 == 0:
-			_spr(SPR_FIRE[int(t * 6.0 + n) % 2], tip + Vector2(0, -8), {"y": P_YELLOW, "o": P_ORANGE, "w": P_RED}, false, 3)
+			_spr(SPR_FIRE[int(t * 6.0 + n) % 2], tip + Vector2(0, -8), {"y": P_YELLOW, "o": P_ORANGE, "w": P_RED}, false, 2)
 	# 舞い上がる火の粉
 	for i in range(18):
 		var ex := fmod(i * 53.0 + sin(t + i) * 6.0, FIELD_W)
@@ -1181,7 +1300,7 @@ func _draw_world() -> void:
 			_px(Rect2(cx2 + 8, cy2 + 1, 6, 1), Color(C_RED, 0.5))
 		for i in range(5):   # 小さな炎
 			var fx2 := float((i * 97 + 40) % int(FIELD_W))
-			_spr(SPR_FIRE[int(t * 8.0 + i) % 2], Vector2(fx2, ground_y - 4.0), {"y": C_YELLOW, "o": C_ORANGE, "w": C_RED}, i % 2 == 0, 3)
+			_spr(SPR_FIRE[int(t * 8.0 + i) % 2], Vector2(fx2, ground_y - 4.0), {"y": C_YELLOW, "o": C_ORANGE, "w": C_RED}, i % 2 == 0, 2)
 
 	# 極楽（ゴール）
 	var goal_y := _sy(ThreadModel.GOAL)
@@ -1278,7 +1397,7 @@ func _draw_world() -> void:
 			# 振りかぶり中: 頭上の岩と、飛んでいく道筋（赤い点線）
 			var shake2 := roundf(sin(t * 50.0) * 1.0)
 			var hold := Vector2(hx + shake2, hy + roundf((1.0 - clampf(rk.t / 0.15, 0.0, 1.0)) * 27.0))
-			_spr(SPR_ROCK[0], hold, ROCK_PAL, false, 3)
+			_spr(SPR_ROCK[0], hold, ROCK_PAL, false, 2)
 			var pulse := 0.55 + 0.45 * absf(sin(t * 10.0))
 			var k3 := 0.0
 			var f: float = model.cfg.rock_flight
@@ -1304,7 +1423,7 @@ func _draw_world() -> void:
 			continue
 		# 飛んでくる岩: 2コマで回りながら飛ぶ
 		var rf := int(tau * 10.0) % 2
-		_spr(SPR_ROCK[rf], Vector2(rkx, rky), ROCK_PAL, rk.side > 0.0, 3)
+		_spr(SPR_ROCK[rf], Vector2(rkx, rky), ROCK_PAL, rk.side > 0.0, 2)
 
 	# 糸（上側）: 天から手元へ
 	var py := _player_sy()
@@ -1317,7 +1436,7 @@ func _draw_world() -> void:
 		tc = C_SILK.lerp(C_RED, (1.0 - model.durability / ThreadModel.DURABILITY_MAX) * 0.7)
 		if model.time_to_snap(true, false) < 1.3 and fmod(t, 0.3) < 0.15:
 			tc = C_RED
-	draw_line(thread_top, hand, tc, 3.0)
+	draw_line(thread_top, hand, tc, 2.0)
 
 	# 糸（下側）と罪人と、糸の耐久度の○ゲージ
 	if model.state == ThreadModel.State.CLIMBING:
@@ -1336,13 +1455,13 @@ func _draw_world() -> void:
 				tip = last.lerp(Vector2(last.x, end_y), 1.0)
 			pts.append(tip)
 			if pts.size() >= 2:
-				draw_polyline(pts, tc, 3.0)
+				draw_polyline(pts, tc, 2.0)
 			# ちぎれた端のほつれ
 			_px(Rect2(tip.x - 1, tip.y, 1, 2), Color(tc, 0.7))
 			_px(Rect2(tip.x + 1, tip.y + 1, 1, 2), Color(tc, 0.7))
 		else:
 			if pts.size() >= 2:
-				draw_polyline(pts, tc, 3.0)
+				draw_polyline(pts, tc, 2.0)
 		for g in range(int(model.ghosts)):
 			var gy := py + 66.0 + g * GHOST_GAP
 			if gy > H + 10.0:
@@ -1359,7 +1478,7 @@ func _draw_world() -> void:
 		var age: float = th[2]
 		var ty: float = _sy(th[0]) + roundf(age * age * 450.0)
 		var tx: float = _sx(th[1])
-		draw_line(Vector2(tx, ty), Vector2(tx + roundf(5.0 * age), ty + 350.0), Color(C_RED, maxf(0.0, 1.0 - age * 0.6)), 3.0)
+		draw_line(Vector2(tx, ty), Vector2(tx + roundf(5.0 * age), ty + 350.0), Color(C_RED, maxf(0.0, 1.0 - age * 0.6)), 2.0)
 	for f in falling_ghosts:   # 落ちていく罪人（手足をばたつかせて、そのまま落下）
 		var fr: int = int(f[2] * 1.5) % 2
 		var fp: Vector2 = f[0]
@@ -1377,12 +1496,12 @@ func _draw_world() -> void:
 		var rr2 := roundf(blast_px * grow)
 		var fade := 1.0 - maxf(bk - 0.45, 0.0) / 0.55
 		draw_circle(bc, rr2, Color(C_WHITE, 0.18 * fade))
-		draw_arc(bc, rr2, 0, TAU, 48, Color(C_YELLOW, fade), 3.0)
-		draw_arc(bc, maxf(rr2 - 6.0, 0.0), 0, TAU, 48, Color(C_WHITE, 0.6 * fade), 3.0)
+		draw_arc(bc, rr2, 0, TAU, 48, Color(C_YELLOW, fade), 2.0)
+		draw_arc(bc, maxf(rr2 - 6.0, 0.0), 0, TAU, 48, Color(C_WHITE, 0.6 * fade), 2.0)
 		for k in range(16):   # 放射状の線
 			var ang := TAU * k / 16.0 + 0.2
 			var r0 := rr2 * 0.55
-			draw_line(bc + Vector2(cos(ang), sin(ang)) * r0, bc + Vector2(cos(ang), sin(ang)) * rr2, Color(C_WHITE, 0.5 * fade), 3.0)
+			draw_line(bc + Vector2(cos(ang), sin(ang)) * r0, bc + Vector2(cos(ang), sin(ang)) * rr2, Color(C_WHITE, 0.5 * fade), 2.0)
 
 	# 叫び演出
 	if fx_shout > 0.0:
@@ -1461,7 +1580,7 @@ func _draw_lava() -> void:
 		var ph := fmod(t * 0.6 + k * 0.31, 1.0)
 		if ph < 0.35:
 			var rr := 1.0 + ph * 14.0
-			draw_arc(Vector2(bx, top + 2.0), rr, PI, TAU, 10, C_YELLOW, 3.0)
+			draw_arc(Vector2(bx, top + 2.0), rr, PI, TAU, 10, C_YELLOW, 2.0)
 			draw_circle(Vector2(bx, top + 3.0), rr - 1.0, Color(C_ORANGE, 0.8))
 
 
@@ -1655,7 +1774,7 @@ func _draw_meadow() -> void:
 	for i in range(3):
 		var bx := fmod(t * 30.0 + i * 90.0, W + 60.0) - 30.0
 		var by := 90.0 + i * 14.0 + roundf(sin(t * 3.0 + i) * 3.0)
-		_spr(SPR_BIRD, Vector2(roundf(bx), by), {"b": P_DBLUE}, false, 3)
+		_spr(SPR_BIRD, Vector2(roundf(bx), by), {"b": P_DBLUE}, false, 2)
 	# 遠くの丘
 	for x in range(0, int(W), 2):
 		var hh := 26.0 + sin(x * 0.012) * 14.0 + sin(x * 0.031 + 1.0) * 6.0
@@ -1726,9 +1845,9 @@ func _draw_meadow() -> void:
 
 	# 真ん中の大きな蓮の葉と、蜘蛛。糸は葉の脇から池の中へ
 	var leaf := pond + Vector2(0, 4)
-	_spr(SPR_LILY_PAD, leaf, {"g": P_DGREEN, "G": P_GREEN}, false, 6)
+	_spr(SPR_BIG_PAD, leaf, {"g": P_DGREEN, "G": P_GREEN}, false, 2)
 	var sp := leaf + Vector2(30, -8)
-	draw_line(sp + Vector2(-6, 4), leaf + Vector2(20, 10), Color(C_GOLD, 0.9), 3.0)
+	draw_line(sp + Vector2(-6, 4), leaf + Vector2(20, 10), Color(C_GOLD, 0.9), 2.0)
 	_spr(SPR_SPIDER, sp + Vector2(0, roundf(sin(t * 2.0))), {"l": P_BLACK, "b": P_DGREY, "e": P_RED})
 
 	# カンダタ: 水面からしぶきを上げて飛び出し、葉の上で両手を上げて喜ぶ
@@ -1737,13 +1856,13 @@ func _draw_meadow() -> void:
 		var sk := (phase_t - 0.35) / 1.25
 		for j in range(3):
 			var rr := roundf(8.0 + sk * 60.0 + j * 10.0)
-			draw_arc(leaf, rr, PI * 1.05, PI * 1.95, 24, Color(C_CLOUD, maxf(0.0, 0.8 - sk)), 3.0)
+			draw_arc(leaf, rr, PI * 1.05, PI * 1.95, 24, Color(C_CLOUD, maxf(0.0, 0.8 - sk)), 2.0)
 		for j in range(8):
 			var dx := (j - 3.5) * 6.0
 			var dy := -sin(sk * PI) * (30.0 + (j % 3) * 10.0)
 			_px(Rect2(leaf.x + roundf(dx * (1.0 + sk * 2.0)), leaf.y - 6 + roundf(dy), 2, 2), Color(C_CLOUD, maxf(0.0, 1.0 - sk)))
 	var ky := lerpf(leaf.y + 20.0, leaf.y - 24.0, 1.0 - (1.0 - k) * (1.0 - k)) - roundf(absf(sin(t * 5.0)) * 4.0) * k
-	_spr(SPR_KANDATA_JUMP, Vector2(leaf.x - 4, roundf(ky)), {"s": C_SKIN, "h": C_HAIR, "k": C_BLACK, "m": C_RED, "c": C_CLOTH}, false, 3)
+	_spr(SPR_KANDATA_JUMP, Vector2(leaf.x - 4, roundf(ky)), {"s": C_SKIN, "h": C_HAIR, "k": C_BLACK, "m": C_RED, "c": C_CLOTH}, false, 2)
 
 	# お釈迦様: 池のほとり、蓮の台座に座って静かに見守る
 	var bud := Vector2(552, 244)
@@ -1751,7 +1870,7 @@ func _draw_meadow() -> void:
 	var halo := bud + Vector2(0, -30)
 	draw_circle(halo, 44.0, Color(C_YELLOW, 0.10 + 0.06 * glow))
 	draw_circle(halo, 32.0, Color(C_YELLOW, 0.18))
-	draw_arc(halo, 34.0, 0, TAU, 40, Color(C_GOLD, 0.85), 3.0)
+	draw_arc(halo, 34.0, 0, TAU, 40, Color(C_GOLD, 0.85), 2.0)
 	for k2 in range(12):   # 後光
 		var a2 := TAU * k2 / 12.0
 		var p2 := halo + Vector2(cos(a2), sin(a2)) * (38.0 + 2.0 * glow)
@@ -1759,7 +1878,7 @@ func _draw_meadow() -> void:
 	_spr(SPR_BUDDHA, bud, {"h": P_DBLUE, "s": P_YELLOW, "k": P_BROWN,
 			"m": P_ORANGE, "w": P_WHITE, "r": P_ORANGE, "R": P_BROWN}, false, 3)
 	_draw_particles()
-	_spr(SPR_PEDESTAL, bud + Vector2(0, 38), {"p": P_PINK, "P": P_PEACH, "g": P_DGREEN}, false, 3)
+	_spr(SPR_PEDESTAL, bud + Vector2(0, 38), {"p": P_PINK, "P": P_PEACH, "g": P_DGREEN}, false, 2)
 
 
 func _draw_ring(c: Vector2, snap: float) -> void:
@@ -1771,14 +1890,14 @@ func _draw_ring(c: Vector2, snap: float) -> void:
 	if snap < 1.3:
 		col = C_RED
 	draw_circle(c, 9.0, C_BLACK)
-	draw_arc(c, 6.0, 0, TAU, 24, Color(C_WHITE, 0.2), 3.0)
+	draw_arc(c, 6.0, 0, TAU, 24, Color(C_WHITE, 0.2), 2.0)
 	if r > 0.0:
-		draw_arc(c, 6.0, -PI * 0.5, -PI * 0.5 + TAU * r, 24, col, 3.0)
+		draw_arc(c, 6.0, -PI * 0.5, -PI * 0.5 + TAU * r, 24, col, 2.0)
 	if ring_nope > 0.0:   # 踏み台がいないのに叫んだ: ○が左右に震える
 		c.x += roundf(sin(ring_nope * 60.0) * 2.0)
 	if snap < 1.5:   # 切れそう: 赤く脈打つ
 		col = C_RED if fmod(t, 0.3) < 0.18 else C_YELLOW
-		draw_arc(c, 11.0 + roundf(absf(sin(t * 12.0)) * 2.0), 0, TAU, 24, col, 3.0)
+		draw_arc(c, 11.0 + roundf(absf(sin(t * 12.0)) * 2.0), 0, TAU, 24, col, 2.0)
 		if model.can_shout():
 			_label(Vector2(c.x + 14, c.y + 6), "叫べ！", 16, col)
 
@@ -1823,7 +1942,7 @@ func _draw_map() -> void:
 	# 極楽の蓮（ゆっくり光る）
 	var glow := 0.25 + 0.2 * sin(t * 2.0)
 	draw_circle(Vector2(cx, MAP_TOP - 12.0), 9.0, Color(C_YELLOW, glow * 0.5))
-	_spr(SPR_LOTUS, Vector2(cx, MAP_TOP - 12), {"y": C_YELLOW}, false, 3)
+	_spr(SPR_LOTUS, Vector2(cx, MAP_TOP - 12), {"y": C_YELLOW}, false, 2)
 	# 枠と中身
 	_px(Rect2(bx - 1.0, MAP_TOP - 1.0, bw + 2.0, MAP_BOT - MAP_TOP + 2.0), C_DARK)
 	_px(Rect2(bx, MAP_TOP, bw, MAP_BOT - MAP_TOP), P_DBLUE)
@@ -1859,7 +1978,7 @@ func _draw_map() -> void:
 			_px(Rect2(bx - 1.0, MAP_TOP - 1.0, 1, MAP_BOT - MAP_TOP + 2.0), C_RED)
 			_px(Rect2(bx + bw, MAP_TOP - 1.0, 1, MAP_BOT - MAP_TOP + 2.0), C_RED)
 	# カンダタの顔
-	_spr(SPR_HEAD, Vector2(cx, cur), {"h": C_HAIR, "s": C_SKIN, "k": C_BLACK}, false, 3)
+	_spr(SPR_HEAD, Vector2(cx, cur), {"h": C_HAIR, "s": C_SKIN, "k": C_BLACK}, false, 2)
 
 
 func _draw_hud() -> void:
@@ -1889,22 +2008,22 @@ func _draw_title() -> void:
 			if tw < 0.15:   # きらっ
 				_px(Rect2(sx - 2, sy, 6, 2), sc2)
 				_px(Rect2(sx, sy - 2, 2, 6), sc2)
-	draw_line(Vector2(cx, 0), Vector2(cx, 150), P_WHITE, 3.0)   # 糸（文字の後ろ）
+	draw_line(Vector2(cx, 0), Vector2(cx, 150), P_WHITE, 2.0)   # 糸（文字の後ろ）
 	_px(Rect2(cx - 150, 64, 300, 60), P_BLACK)
 	_label(Vector2(cx, 92), "パワーカンダタ（仮）", 32, P_YELLOW, HORIZONTAL_ALIGNMENT_CENTER)
 	_label(Vector2(cx, 116), "蜘蛛の糸から、極楽へ", 16, P_PINK, HORIZONTAL_ALIGNMENT_CENTER)
 	# 蜘蛛と、ぶら下がるカンダタ
-	_spr(SPR_SPIDER, Vector2(cx, 132 + roundf(sin(t * 2.0) * 2.0)), {"l": P_WHITE, "b": P_DGREY, "e": P_RED}, false, 3)
+	_spr(SPR_SPIDER, Vector2(cx, 132 + roundf(sin(t * 2.0) * 2.0)), {"l": P_WHITE, "b": P_DGREY, "e": P_RED}, false, 2)
 	var bob := roundf(sin(t * 3.0) * 2.0)
-	_spr(SPR_KANDATA, Vector2(cx, 176 + bob), {"s": C_SKIN, "h": C_HAIR, "k": C_BLACK, "m": C_RED, "c": C_CLOTH}, false, 6)
+	_spr(SPR_KANDATA, Vector2(cx, 176 + bob), {"s": C_SKIN, "h": C_HAIR, "k": C_BLACK, "m": C_RED, "c": C_CLOTH}, false, 2)
 	# 登場するものたち
 	var hop := func(i: int) -> float: return -roundf(absf(sin(t * 4.0 + i)) * 4.0)
-	_spr(SPR_ONI_UP, Vector2(cx - 210, 190 + hop.call(0)), ONI_PAL, false, 3)
-	_spr(SPR_ROCK[int(t * 4.0) % 2], Vector2(cx - 210, 150 + hop.call(0)), ROCK_PAL, false, 3)
-	_spr(SPR_FIRE[int(t * 8.0) % 2], Vector2(cx - 130, 196 + hop.call(1)), {"y": P_YELLOW, "o": P_ORANGE, "w": P_WHITE}, false, 3)
-	_spr(SPR_GHOST, Vector2(cx + 120, 192 + hop.call(2)), _ghost_pal(1), true, 3)
-	_spr(SPR_GHOST_RUN, Vector2(cx + 165, 192 + hop.call(3)), _ghost_pal(2), true, 3)
-	_spr(SPR_LOTUS_FLOWER, Vector2(cx + 225, 196 + hop.call(4)), {"p": P_LGREY, "P": P_WHITE, "y": P_YELLOW, "g": P_DGREEN}, false, 3)
+	_spr(SPR_ONI_UP, Vector2(cx - 210, 190 + hop.call(0)), ONI_PAL, false, 2)
+	_spr(SPR_ROCK[int(t * 4.0) % 2], Vector2(cx - 210, 150 + hop.call(0)), ROCK_PAL, false, 2)
+	_spr(SPR_FIRE[int(t * 8.0) % 2], Vector2(cx - 130, 196 + hop.call(1)), {"y": P_YELLOW, "o": P_ORANGE, "w": P_WHITE}, false, 2)
+	_spr(SPR_GHOST, Vector2(cx + 120, 192 + hop.call(2)), _ghost_pal(1), true, 2)
+	_spr(SPR_GHOST_RUN, Vector2(cx + 165, 192 + hop.call(3)), _ghost_pal(2), true, 2)
+	_spr(SPR_LOTUS_FLOWER, Vector2(cx + 225, 196 + hop.call(4)), {"p": P_LGREY, "P": P_WHITE, "y": P_YELLOW, "g": P_DGREEN}, false, 2)
 	var dcol: Color = [P_GREEN, P_YELLOW, P_RED][difficulty]
 	_label(Vector2(cx, 256), "＜ %s ＞" % ThreadModel.DIFFICULTY_NAMES[difficulty], 16, dcol, HORIZONTAL_ALIGNMENT_CENTER)
 	if best_time[difficulty] > 0.0:
@@ -1966,7 +2085,7 @@ func _draw_panel() -> void:
 	var px := 40.0
 	var py := 34.0
 	_px(Rect2(px - 16, py - 26, 592, 336), P_BLACK)
-	draw_rect(Rect2(px - 16, py - 26, 592, 336), C_GOLD, false, 3.0)
+	draw_rect(Rect2(px - 16, py - 26, 592, 336), C_GOLD, false, 2.0)
 	_label(Vector2(px, py), "調整パネル（一時停止中）", 16, C_GOLD)
 	var keys: Array = ThreadModel.TUNE_ORDER
 	for i in range(keys.size()):
