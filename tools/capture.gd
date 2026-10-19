@@ -96,6 +96,9 @@ func _process(_d: float) -> void:
 				if kk > th and not shots.has(nm):
 					shots[nm] = true
 					_snap(nm)
+		if m.height > 962.0 and not shots.has("near_goal"):
+			shots["near_goal"] = true
+			_snap("near_goal")
 		var gap: float = m.height - m.lava_h
 		if gap < 34.0 and m.lava_h > 0.0 and not shots.has("lava1"):
 			shots["lava1"] = true
