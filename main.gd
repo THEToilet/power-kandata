@@ -9,9 +9,9 @@ const H := 360.0
 const FIELD_W := 616.0       # 遊ぶ画面の幅（右端の細い高度バー以外ぜんぶ）
 const THREAD_X := 308.0      # 揺れの中心
 const PLAYER_SY := 236.0     # カンダタを置く高さ
-const PPM := 5.0             # 1m あたりのドット
-const XS := 1.0              # モデルの横位置（px@1280）→ 画面ドット
-const GHOST_GAP := 17.0
+const PPM := 4.2             # 1m あたりのドット
+const XS := 0.85              # モデルの横位置（px@1280）→ 画面ドット
+const GHOST_GAP := 14.0
 const SC := 3                # キャラと障害物のドット1粒の大きさ（PICO-8 っぽく大きめ）
 const MAP_X := 625.0         # 高度マップ（縦の再生バー）
 const MAP_TOP := 34.0
@@ -1089,23 +1089,32 @@ func _spr(rows: Array, pos: Vector2, pal: Dictionary, flip := false, sc := 2) ->
 
 func _draw_world() -> void:
 	# 背景: 高いほど地獄の赤 → 闇 → 極楽の金（帯で段階的に）
-	# 下ほど紫に濁り、極楽に近づくほど藍が澄む。中間色は最後に PICO-8 の16色へディザで寄せる
+	# 空の帯: 下のマグマに照らされて、下ほど赤紫、上ほど暗い。境目は1行おきの横線で（PICO-8 風）
 	var r := clampf(cam_h / ThreadModel.GOAL, 0.0, 1.0)
-	draw_rect(Rect2(0, 0, FIELD_W, H), P_BLACK)
-	# 奥に流れる地獄の炎の文様（ゆっくり流れ、ゆらめく）
-	var scroll := cam_h * PPM * 0.35
-	var row0 := floori(scroll / 72.0)
-	var bg_oy := fmod(scroll, 72.0)
-	var flame_col: Color = P_DPURP if r < 0.7 else P_DBLUE
-	for j in range(-1, 6):
-		var row := j - row0
-		var fy := bg_oy + j * 72.0 - 36.0
-		for gx in range(0, 9):
-			if absi(gx * 7 + row * 13) % 5 > 1:   # まばらに置く（壁紙にしない）
-				continue
-			var fx := gx * 72.0 + (36.0 if row % 2 == 0 else 0.0)
-			var fr := int(t * 3.0 + gx + row) % 2
-			_spr(SPR_HELLFLAME[fr], Vector2(fx, fy), {"f": flame_col}, false, 3)
+	var bands: Array = [P_BLACK, P_DBLUE, P_DPURP, P_RED] if r < 0.75 else [P_DBLUE, P_DBLUE, P_LAV, P_BLUE]
+	var edges := [0.0, 0.28, 0.62, 0.9]     # 各色の始まり（画面の高さの割合）
+	for bi in range(bands.size()):
+		var y0: float = H * edges[bi]
+		var y1: float = H * (edges[bi + 1] if bi + 1 < edges.size() else 1.0)
+		draw_rect(Rect2(0, y0, FIELD_W, y1 - y0), bands[bi])
+		if bi > 0:   # 境目: 前の色の横線を1行おきに残す
+			for k in range(4):
+				draw_rect(Rect2(0, y0 + k * 4.0, FIELD_W, 2 if k < 2 else 1), bands[bi - 1])
+	# 遠くの岩の塔（シルエット、ゆっくり流れる）。てっぺんで炎がゆれる
+	var scroll := cam_h * PPM * 0.25
+	var seg := 90.0
+	var first := floori(scroll / seg) - 1
+	for n in range(first, first + int(H / seg) + 3):
+		var hsh := absi(n * 7919) % 97
+		var sx := float(hsh * 37 % int(FIELD_W - 120)) + 60.0
+		var base_y := H - (float(n) * seg - scroll) - 40.0
+		var tall := 60.0 + float(hsh % 5) * 18.0
+		var wid := 18.0 + float(hsh % 3) * 8.0
+		var tip := Vector2(roundf(sx), roundf(base_y - tall))
+		draw_colored_polygon(PackedVector2Array([Vector2(sx - wid, base_y + 30), Vector2(sx - wid * 0.4, base_y - tall * 0.6),
+				tip, Vector2(sx + wid * 0.4, base_y - tall * 0.5), Vector2(sx + wid, base_y + 30)]), P_BLACK)
+		if hsh % 3 == 0:
+			_spr(SPR_FIRE[int(t * 6.0 + n) % 2], tip + Vector2(0, -8), {"y": P_YELLOW, "o": P_ORANGE, "w": P_RED}, false, 2)
 	# 舞い上がる火の粉
 	for i in range(18):
 		var ex := fmod(i * 53.0 + sin(t + i) * 6.0, FIELD_W)
@@ -1466,7 +1475,10 @@ func _draw_cliffs() -> void:
 				var jx := 16.0 if course_i % 2 == 0 else 0.0
 				var gx2 := jx
 				while gx2 < w:
-					draw_rect(Rect2((x0 + gx2) if left else (ex + gx2), yy, 3, 2), P_BLACK)
+					var bxx: float = (x0 + gx2) if left else (ex + gx2)
+					draw_rect(Rect2(bxx, yy, 3, 2), P_BLACK)
+					if (course_i * 3 + int(gx2 / 32.0) * 5) % 7 == 0:   # ところどころ紫の石
+						draw_rect(Rect2(bxx + 3.0, yy, minf(29.0, w - gx2 - 3.0), 2), P_DPURP)
 					gx2 += 32.0
 			# 縁: 岩肌の明るい面と、輪郭
 			draw_rect(Rect2(ex - 3.0 if left else ex, yy, 3, 2), P_LAV)
