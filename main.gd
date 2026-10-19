@@ -8,360 +8,202 @@ const W := 640.0
 const H := 360.0
 const FIELD_W := 616.0       # 遊ぶ画面の幅（右端の細い高度バー以外ぜんぶ）
 const THREAD_X := 308.0      # 揺れの中心
-const PLAYER_SY := 168.0     # カンダタを置く高さ
-const PPM := 3.6             # 1m あたりのドット
-const XS := 0.85              # モデルの横位置（px@1280）→ 画面ドット
-const GHOST_GAP := 14.0
-const G := 2.0               # 画面全体のドット1粒の大きさ。すべての要素をこの格子にそろえる
-const SC := 2                # キャラと障害物のドット1粒の大きさ（PICO-8 っぽく大きめ）
+const PLAYER_SY := 236.0     # カンダタを置く高さ
+const PPM := 3.5             # 1m あたりのドット
+const XS := 0.7              # モデルの横位置（px@1280）→ 画面ドット
+const GHOST_GAP := 12.0
 const MAP_X := 625.0         # 高度マップ（縦の再生バー）
 const MAP_TOP := 34.0
 const MAP_BOT := 330.0
 const PANEL_X := 640.0
 const TUNING_PATH := "user://tuning_v2.json"   # 標準から変えた値だけ保存する
 
-# ---- パレット: PICO-8 の16色だけを使う（最後に画面全体もこの16色へ寄せる）
-const P_BLACK := Color8(0, 0, 0)
-const P_DBLUE := Color8(29, 43, 83)
-const P_DPURP := Color8(126, 37, 83)
-const P_DGREEN := Color8(0, 135, 81)
-const P_BROWN := Color8(171, 82, 54)
-const P_DGREY := Color8(95, 87, 79)
-const P_LGREY := Color8(194, 195, 199)
-const P_WHITE := Color8(255, 241, 232)
-const P_RED := Color8(255, 0, 77)
-const P_ORANGE := Color8(255, 163, 0)
-const P_YELLOW := Color8(255, 236, 39)
-const P_GREEN := Color8(0, 228, 54)
-const P_BLUE := Color8(41, 173, 255)
-const P_LAV := Color8(131, 118, 156)
-const P_PINK := Color8(255, 119, 168)
-const P_PEACH := Color8(255, 204, 170)
-const PICO8 := [P_BLACK, P_DBLUE, P_DPURP, P_DGREEN, P_BROWN, P_DGREY, P_LGREY, P_WHITE,
-		P_RED, P_ORANGE, P_YELLOW, P_GREEN, P_BLUE, P_LAV, P_PINK, P_PEACH]
-
-# 役割ごとの色（すべて上の16色）
-const C_BLACK := P_BLACK
-const C_DARK := P_DBLUE
-const C_BLOOD := P_DPURP
-const C_RED := P_RED
-const C_ORANGE := P_ORANGE
-const C_YELLOW := P_YELLOW
-const C_GOLD := P_YELLOW
-const C_SKIN := P_PEACH
-const C_HAIR := P_RED
-const C_CLOTH := P_BROWN
-const C_GHOST := P_LAV
-const C_GHOST_D := P_DGREY
-const C_WHITE := P_WHITE
-const C_GREY := P_LAV
-const C_ROCK := P_DGREY
-const C_ROCK_D := P_DBLUE
-const C_ROCK_L := P_LGREY
-const C_GREEN := P_GREEN
-const C_CYAN := P_BLUE
-const C_PURPLE := P_LAV
-const C_SKY_HI := P_BLUE
-const C_SKY_LO := P_WHITE
-const C_CLOUD := P_WHITE
-const C_CLOUD_S := P_LGREY
-const C_GRASS := P_GREEN
-const C_GRASS_D := P_DGREEN
-const C_GRASS_L := P_YELLOW
-const C_HILL := P_LAV
-const C_HILL_D := P_DGREEN
+# ---- パレット（地獄っぽい少色）
+const C_BLACK := Color8(14, 8, 14)
+const C_DARK := Color8(34, 18, 30)
+const C_BLOOD := Color8(112, 20, 28)
+const C_RED := Color8(178, 40, 40)
+const C_ORANGE := Color8(236, 120, 40)
+const C_YELLOW := Color8(250, 210, 90)
+const C_GOLD := Color8(232, 180, 70)
+const C_SKIN := Color8(236, 178, 120)
+const C_HAIR := Color8(40, 24, 24)
+const C_CLOTH := Color8(132, 84, 52)
+const C_GHOST := Color8(150, 140, 190)
+const C_GHOST_D := Color8(96, 86, 140)
+const C_WHITE := Color8(240, 236, 228)
+const C_GREY := Color8(120, 110, 112)
+const C_ROCK := Color8(132, 116, 106)
+const C_ROCK_D := Color8(86, 74, 70)
+const C_ROCK_L := Color8(178, 162, 148)
+const C_GREEN := Color8(96, 196, 96)
+const C_CYAN := Color8(110, 210, 230)
+const C_PURPLE := Color8(170, 150, 236)
+const C_SKY_HI := Color8(58, 132, 228)
+const C_SKY_LO := Color8(176, 222, 250)
+const C_CLOUD := Color8(250, 250, 255)
+const C_CLOUD_S := Color8(200, 214, 240)
+const C_GRASS := Color8(88, 178, 72)
+const C_GRASS_D := Color8(52, 130, 56)
+const C_GRASS_L := Color8(150, 214, 96)
+const C_HILL := Color8(120, 176, 170)
+const C_HILL_D := Color8(92, 150, 150)
 
 # ---- ドット絵（1文字 = 1ドット）
 const SPR_KANDATA := [
-	"........ss........",
-	".......ssss.......",
-	"......s....s......",
-	"......s....s......",
-	".....s..hh..s.....",
-	"....s.hhhhhhs.....",
-	"....shhhhhhhhs....",
-	"...shhhhhhhhhhs...",
-	"...shsssssssshs...",
-	"..s..ssksskss..s..",
-	"..s..ssksskss..s..",
-	"..s..ssssssss..s..",
-	"..s..sssmmsss.s...",
-	"...s..ssssss..s...",
-	"...ssssssssssss...",
-	"...sccccccccccs...",
-	"...cccccccccccc...",
-	"...cccccccccccc...",
-	"....cccccccccc....",
-	"....mmmmmmmmmm....",
-	".....cccccccc.....",
-	".....ss....ss.....",
-	".....ss....ss.....",
-	"....sss....sss....",
+	".....ss.....",
+	"....s..s....",
+	"...shhhhs...",
+	"..hhhhhhhh..",
+	"..hhhhhhhh..",
+	"..hssssssh..",
+	"..sksssksh..",
+	"..ssssssss..",
+	"...ssmmss...",
+	"..cccccccc..",
+	"..cccccccc..",
+	"...cccccc...",
+	"...cc..cc...",
+	"...ss..ss...",
+	"...ss..ss...",
+	"..sss..sss..",
 ]
 const SPR_KANDATA_JUMP := [
-	"..s............s..",
-	"..s............s..",
-	"..s............s..",
-	"..s............s..",
-	"..s.....hh......s.",
-	".s....hhhhhh....s.",
-	".s...hhhhhhhh...s.",
-	".s..hhhhhhhhhh..s.",
-	".s..hssssssssh..s.",
-	".s...ssksskss...s.",
-	"..s..ssksskss..s..",
-	"..s..ssssssss..s..",
-	"..s..sssmmsss..s..",
-	"..s...ssssss...s..",
-	"...ssssssssssss...",
-	"...sccccccccccs...",
-	"...cccccccccccc...",
-	"...cccccccccccc...",
-	"....cccccccccc....",
-	"....mmmmmmmmmm....",
-	".....cccccccc.....",
-	"....ss......ss....",
-	"....ss......ss....",
-	"...ss........ss...",
+	"..s......s..",
+	"..s......s..",
+	"..sh....hs..",
+	"..hhhhhhhh..",
+	"..hhhhhhhh..",
+	"..hssssssh..",
+	"..sksssksh..",
+	"..ssssssss..",
+	"...ssmmss...",
+	"..cccccccc..",
+	"..cccccccc..",
+	"..cccccccc..",
+	"...cc..cc...",
+	"..ss....ss..",
+	".ss......ss.",
+	"............",
 ]
 # 登りのモーション: 左手を上へ伸ばし、右手は腰で糸を握る。右足を引き上げる（左右反転で逆の手足）
 const SPR_KANDATA_REACH := [
-	"........ss........",
-	".......sss........",
-	"......s...........",
-	"......s...........",
-	".....s..hh........",
-	"....s.hhhhhh......",
-	"....shhhhhhhh.....",
-	"...shhhhhhhhhh....",
-	"...shssssssssh....",
-	"..s..ssksskss.....",
-	"..s..ssksskss.....",
-	"..s..ssssssss.....",
-	"..s..sssmmsss.....",
-	"...s..ssssss......",
-	"...sssssssssss....",
-	"...sccccccccccs...",
-	"...cccccccccccs...",
-	"...ccccccccccccs..",
-	"....ccccccccccss..",
-	"....mmmmmmmmms....",
-	"....sssccssss.....",
-	"...ss....ssss.....",
-	"...........ss.....",
-	"...........sss....",
+	".....ss.....",
+	"....s.......",
+	"...shhhhh...",
+	"..shhhhhhh..",
+	"..hhhhhhhh..",
+	"..hssssssh..",
+	"..sksssksh..",
+	"..ssssssss..",
+	"...ssmmss...",
+	"..cccccccc..",
+	"..ccccccccs.",
+	"...cccccc.s.",
+	"...cc..ccs..",
+	"..sss..ss...",
+	"........ss..",
+	"........sss.",
 ]
 # 罪人: カンダタと同じ立場の人間。顔つき・体つきは同じで、髪と腰布の色だけが違う
 const SPR_GHOST := [
-	".s.............",
-	".s.............",
-	".s..hhhhhh.....",
-	"s..hhhhhhhh....",
-	"s.hhhhhhhhhh...",
-	"s.hssssssssh...",
-	"s..ssksskss....",
-	"s..ssksskss....",
-	"s..ssssssss....",
-	"s..sssmmsss....",
-	".s..ssssss.....",
-	".sssssssssss...",
-	".sccccccccccs..",
-	".cccccccccccs..",
-	".ccccccccccccs.",
-	"..cccccccccc.s.",
-	"..mmmmmmmmmm...",
-	"...cccccccc....",
-	"...ss....ss....",
-	"...ss....ss....",
+	"s.........",
+	".s.hhhh...",
+	"..hhhhhhh.",
+	"..hhhhhhh.",
+	"..hsssssh.",
+	"..skssks..",
+	"..sssssss.",
+	"...smms...",
+	"..ccccccc.",
+	"..ccccccs.",
+	"...cc.cc..",
+	"...s...s..",
+	"..ss...ss.",
 ]
 const SPR_GHOST_RUN := [
-	".s.............",
-	".s.............",
-	".s..hhhhhh.....",
-	"s..hhhhhhhh....",
-	"s.hhhhhhhhhh...",
-	"s.hssssssssh...",
-	"s..ssksskss....",
-	"s..ssksskss....",
-	"s..ssssssss....",
-	"s..sssmmsss....",
-	".s..ssssss.....",
-	".sssssssssss...",
-	".sccccccccccs..",
-	".cccccccccccs..",
-	".ccccccccccccs.",
-	"..cccccccccc.s.",
-	"..mmmmmmmmmm...",
-	"...cccccccc....",
-	"..ss......ss...",
-	".ss.......sss..",
+	"s.........",
+	".s..hhh...",
+	"..shhhhh..",
+	"..hhhhhhh.",
+	"..hsssssh.",
+	"..skssks..",
+	"..sssssss.",
+	"...smms...",
+	"..ccccccc.",
+	"..ccccccs.",
+	"...ccccc..",
+	"..s....s..",
+	".ss.....ss",
 ]
 # 鬼: 崖の岩棚に現れて、岩を投げてくる。赤い肌・角・虎の腰布
-const SPR_ONI_UP := [
-	"....y........y....",
-	"....y........y....",
-	".....y......y.....",
-	".....yhhhhhhy.....",
-	".....yhhhhhhy.....",
-	".....hhhhhhhh.....",
-	".r..rrrrrrrrrr..r.",
-	".r..rkkkrrkkkr..r.",
-	"..r.rrwwrrwwrr.r..",
-	"..r.rrwkrrkwrr.r..",
-	"..r.rrwrrrrwrr.r..",
-	"..r.rrkkkkkkrr.r..",
-	"...rrrrrrrrrrrr...",
-	"...rrrrrrrrrrrr...",
-	"...rrddddddddrr...",
-	"...rrrrrrrrrrrr...",
-	"...rrrrrrrrrrrr...",
-	"...rrrrrrrrrrrr...",
-	"....bttbttbttb....",
-	"....tbttbttbttb...",
-	".....rr....rr.....",
-	"....rrr....rrr....",
+const SPR_ONI_UP := [   # 振りかぶり（両手で岩を頭上に）
+	"r.y......y.r",
+	"r.yy....yy.r",
+	"rr.hhhhhh.rr",
+	".rhhhhhhhhr.",
+	"..hrrrrrrh..",
+	"..rwkrrkwr..",
+	"..rrrrrrrr..",
+	"...rwwwwr...",
+	"..rrrrrrrr..",
+	"..rrddrrrr..",
+	"..rrrrrrrr..",
+	"...tbtbtt...",
+	"...tbtbtb...",
+	"...rr..rr...",
+	"..rrr..rrr..",
 ]
-const SPR_ONI_THROW := [
-	"....y........y....",
-	"....y........y....",
-	".....y......y.....",
-	".....yhhhhhhy.....",
-	".....yhhhhhhy.....",
-	".....hhhhhhhh.....",
-	"....rrrrrrrrrr....",
-	"....rkkkrrkkkr....",
-	"....rrwwrrwwrr....",
-	"....rrwkrrkwrr....",
-	"....rrwrrrrwrr....",
-	"....rrkkkkkkrr...r",
-	"....rrrrrrrrrr...r",
-	"...rrrrrrrrrrrrrr.",
-	"...rrddddddddrr...",
-	"..rrrrrrrrrrrrr...",
-	"..rrrrrrrrrrrrr...",
-	".r.rrrrrrrrrrrr...",
-	"....bttbttbttb....",
-	"....tbttbttbttb...",
-	".....rr....rr.....",
-	"....rrr....rrr....",
+const SPR_ONI_THROW := [   # 投げた（右へ腕を伸ばす）
+	"..y......y..",
+	"..yy....yy..",
+	"...hhhhhh...",
+	"..hhhhhhhh..",
+	"..hrrrrrrh..",
+	"..rwkrrkwr..",
+	"..rrrrrrrr..",
+	"...rwwwwr...",
+	"..rrrrrrrrrr",
+	".rrrddrrr...",
+	"rr.rrrrrr...",
+	"r..tbtbtt...",
+	"...tbtbtb...",
+	"...rr..rr...",
+	"..rrr..rrr..",
 ]
-const ONI_PAL := {"r": P_RED, "d": P_DPURP, "y": P_WHITE, "h": P_BLACK,
-		"w": P_WHITE, "k": P_BLACK, "t": P_YELLOW, "b": P_BLACK}
-const GHOST_HAIR := [P_DGREY, P_LAV, P_DBLUE, P_DPURP]
+const ONI_PAL := {"r": Color8(196, 52, 44), "d": Color8(140, 32, 30), "y": Color8(236, 226, 196), "h": Color8(30, 18, 18),
+		"w": Color8(250, 248, 236), "k": Color8(20, 10, 10), "t": Color8(236, 184, 48), "b": Color8(30, 20, 16)}
+const GHOST_HAIR := [Color8(40, 24, 24), Color8(24, 18, 20), Color8(64, 40, 30), Color8(52, 44, 44)]
 const SPR_FIRE := [
 	[
-		"........o.......",
-		".......oo.......",
-		".......oyo......",
-		"......oyyo...o..",
-		"......oyyo..oo..",
-		".....oyyyyo.oo..",
-		"....oyywyyooyo..",
-		"....oywwwyyyo...",
-		"...oyywwwwyyo...",
-		"..oyywwwwwyyo...",
-		"..oywwwwwwwyyo..",
-		".oyywwwwwwwwyo..",
-		".oyywwwwwwwwyo..",
-		".oyywwwwwwwyyo..",
-		"..oyywwwwwyyo...",
-		"...ooyyyyyyoo...",
-		".....oooooo.....",
-		"................",
+		"......y.....",
+		".....yy.....",
+		"....yyo.....",
+		"...yyooo....",
+		"...yowwo..o.",
+		"..yowwwwoo..",
+		"..owwwwwwo..",
+		".oowwwwwwoo.",
+		".oowwwwwwoo.",
+		"..oowwwwoo..",
+		"...oooooo...",
+		".....oo.....",
 	],
 	[
-		"......o.........",
-		"......oo........",
-		".....oyo........",
-		"..o..oyyo.......",
-		"..oo.oyyo.......",
-		"..oo.oyyyyo.....",
-		"..oyooyywyyo....",
-		"...oyyywwwyo....",
-		"...oyywwwwyyo...",
-		"..oyywwwwwyyo...",
-		"..oywwwwwwwyyo..",
-		".oyywwwwwwwwyo..",
-		".oyywwwwwwwwyo..",
-		".oyywwwwwwwyyo..",
-		"..oyywwwwwyyo...",
-		"...ooyyyyyyoo...",
-		".....oooooo.....",
-		"................",
+		".....y......",
+		".....yy.....",
+		".....oyy....",
+		"....oooyy...",
+		".o..owwoy...",
+		"..oowwwwoy..",
+		"..owwwwwwo..",
+		".oowwwwwwoo.",
+		".oowwwwwwoo.",
+		"..oowwwwoo..",
+		"...oooooo...",
+		".....oo.....",
 	],
 ]
-# 背景の地獄の炎の文様（絵巻の炎をドットで）
-const SPR_HELLFLAME := [
-	[
-		"....f....",
-		"...ff....",
-		"...fff...",
-		"..fff.f..",
-		"..ff..ff.",
-		".fff..ff.",
-		".ff....f.",
-		".ff.f..ff",
-		"ff..ff.ff",
-		"ff.fff.ff",
-		".ff.f.ff.",
-		"..fffff..",
-	],
-	[
-		".....f...",
-		"....ff...",
-		"...fff...",
-		"..f.fff..",
-		".ff..ff..",
-		".ff..fff.",
-		".f....ff.",
-		"ff..f.ff.",
-		"ff.ff..ff",
-		"ff.fff.ff",
-		".ff.f.ff.",
-		"..fffff..",
-	],
-]
-# 鬼の投げる岩（2コマで回る）
-const SPR_ROCK := [
-	[
-		"................",
-		".....kkkkkk.....",
-		"...kkddddddkk...",
-		"..kdlllddddddk..",
-		".kkllddddddddkk.",
-		".kdlldkkddddddk.",
-		".kddddddddddddk.",
-		"kddddddddddddddk",
-		"kdddddddddkdkddk",
-		".kddddddddddddk.",
-		".kddddkkddddddk.",
-		".kkddddddddddkk.",
-		"..kddddddddddk..",
-		"...kkddddddkk...",
-		".....kkkkkk.....",
-		"................",
-	],
-	[
-		"................",
-		".....kkkkkk.....",
-		"...kkddddddkk...",
-		"..kdlllddddddk..",
-		".kkllddddddddkk.",
-		".kdlldddddddddk.",
-		".kdddkkdddkkddk.",
-		"kddddddddddddddk",
-		"kddddddddddddddk",
-		".kddddddddddddk.",
-		".kddddddkdddddk.",
-		".kkddddddddddkk.",
-		"..kddddddddddk..",
-		"...kkddddddkk...",
-		".....kkkkkk.....",
-		"................",
-	],
-]
-const DEF_PAL := {"d": P_PINK, "e": P_DPURP}   # 鼻の影・服の継ぎ目（パレット未指定のとき）
-const ROCK_PAL := {"k": P_BLACK, "d": P_DGREY, "l": P_LGREY}
 const SPR_LOTUS := [
 	"...y...",
 	"..yyy..",
@@ -381,97 +223,60 @@ const SPR_CLOUD := [
 	"..ssssssssssssssssssss..",
 ]
 const SPR_SPIDER := [
-	"..l...........l..",
-	"...l..l...l..l...",
-	"....l..lbl..l....",
-	"l....llbbbll....l",
-	".l....bbbbb....l.",
-	"..llllbebebllll..",
-	"......bbbbb......",
-	"..llllbbbbbllll..",
-	".l...lbbbbbl...l.",
-	"l...l..bbb..l...l",
-	"...l...bbb...l...",
-	"..l.....b.....l..",
-	".................",
+	"l..l.....l..l",
+	".l..l...l..l.",
+	"..l.lbbbl.l..",
+	"llllbbbbbllll",
+	"....bebeb....",
+	"llllbbbbbllll",
+	"..l.lbbbl.l..",
+	".l...bbb...l.",
+	"l.....b.....l",
 ]
 const SPR_LOTUS_FLOWER := [
-	".......P........",
-	"......PPP.......",
-	"...P..PPP..P....",
-	"...PP.PpP.PP....",
-	"P..PPPPpPPPP..P.",
-	"PP.PpPPpPPpP.PP.",
-	".PPPpPyyyPpPPP..",
-	"..PPPPyyyPPPP...",
-	"...PPPPPPPPP....",
-	"gggggggggggggggg",
-	"..gggggggggggg..",
+	".....P.....",
+	"...p.P.p...",
+	"..pPpPpPp..",
+	".pPPPyPPPp.",
+	"..pPPPPPp..",
+	"ggggggggggg",
+	".ggggggggg.",
 ]
 const SPR_LILY_PAD := [
-	"....gggggg.ggggg....",
-	".ggggggggg.gggggggg.",
-	"gggggggggg.ggggggggg",
-	"gGgggggGgg.gggggGggg",
-	".gggGggggggggGgggggG",
-	"....gggggggggggg....",
-]
-const SPR_BIG_PAD := [
-	"...........ggggggggg.gggggggg...........",
-	"......gggggggggggggg.ggggggggggggg......",
-	"...ggggggggggggggggg.gggggggggggggggg...",
-	".ggggggggggggggggggg.gggggggggggggggggg.",
-	"gggggggggggggggggggg.ggggggggggggggggggg",
-	"gggggggggggGgggggGgg.gggggGggggggggggggg",
-	".gggggggggggggGggggggggGgggggGggggggggg.",
-	"...gggggggggggggggggggggggggggggggggg...",
-	"......gggggggggggggggggggggggggggg......",
-	"...........gggggggggggggggggg...........",
+	"..gggg.gggg..",
+	".gggggggggggg",
+	"ggggGggggGggg",
+	".ggggggggggg.",
 ]
 const SPR_BUDDHA := [
-	".........hhhhhhhhh.........",
-	".........hhhhhhhhh.........",
-	"........khkhkhkhkhk........",
-	"........hhhhhhhhhhh........",
-	"........hhhhhhhhhhh........",
-	"........ssssswsssss........",
-	"......sssssssssssssss......",
-	"......ssskkkssskkksss......",
-	"......sssssssssssssss......",
-	"......sssssssksssssss......",
-	"......sssssssssssssss......",
-	"......ssssssmmmssssss......",
-	"......sssssssssssssss......",
-	".........sssssssss.........",
-	"..........sssssss..........",
-	"....rrrrrrrssssssrrrrrr....",
-	"....RrrrrrrssssssrrrrrR....",
-	"....rRrrrrrssssssrrrrRr....",
-	"....rRrrrrrssssssrrrrRr....",
-	"....rrRrrrrssssssrrrRrr....",
-	"....rrrRrrrrrrrrrrrrRrr....",
-	"....rrrrRrrrrrrrrrrRrrr....",
-	"....rrrrRsssssssssRrrrr....",
-	"....rrrrrssRRRRRssRrrrr....",
-	"....rrrrrsssssssssrrrrr....",
-	"....rrrrrrRrrrrrrrrrrrr....",
-	".rrrrrrrrrrrrrrrrrrrrrrrrr.",
-	".rrRRRRRRRRRRrrrrrrrrrrrrr.",
-	".rrrrrrrrrrrrRRRRRRRRRRRrr.",
-	".rrrrrrrrrrrrrrrrrrrrrrrrr.",
-	".RRRRRRRRRRRRRRRRRRRRRRRRR.",
-	".RRRRRRRRRRRRRRRRRRRRRRRRR.",
+	"........hh........",
+	".......hhhh.......",
+	".....hhhhhhhh.....",
+	"....hhhhhhhhhh....",
+	"....hhhhhhhhhh....",
+	"....ssssswssss....",
+	"...sskkssssskks...",
+	"...ssssssssssss...",
+	"...s.sssssssss.s..",
+	"...s..ssmmmss..s..",
+	".......ssssss.....",
+	".....rrrsssrrr....",
+	"...rrrrrrssrrrrr..",
+	"..rrrrrrrrrrrrRr..",
+	"..rrRrrrrrrrrrRr..",
+	".rrrRrrrrrrrrrRrr.",
+	".rrrRrrsssssrrRrr.",
+	".rrrRrrsssssrrRrr.",
+	"rrrrrrrrrrrrrrrrrr",
+	"rRRRRRRRRRRRRRRRRr",
+	".rrrrrrrrrrrrrrrr.",
 ]
 const SPR_PEDESTAL := [
-	"..P....P....P....P....P....P....P....P..",
-	".PPP..PPP..PPP..PPP..PPP..PPP..PPP..PPP.",
-	"PPpPPPPpPPPPpPPPPpPPPPpPPPPpPPPPpPPPPpPP",
-	"pPPPppPPPppPPPppPPPppPPPppPPPppPPPppPPPp",
-	"pppppppppppppppppppppppppppppppppppppppp",
-	"pppppppppppppppppppppppppppppppppppppppp",
-	"pppppppppppppppppppppppppppppppppppppppp",
-	"..gggggggggggggggggggggggggggggggggggg..",
-	"....gggggggggggggggggggggggggggggggg....",
+	"..p..p..p..p..p..p..p..",
+	".pPp.pPppPp.pPppPp.pPp.",
+	"pPPPpPPPPPPpPPPPPPpPPPp",
+	"ppppppppppppppppppppppp",
+	".ggggggggggggggggggggg.",
 ]
 const SPR_BIRD := [
 	"b...b",
@@ -479,15 +284,12 @@ const SPR_BIRD := [
 	"..b..",
 ]
 const SPR_HEAD := [
-	"..hhhhh..",
-	"..hhhhh..",
-	".hhhhhhh.",
-	".hsssssh.",
-	".skkskks.",
-	".skkskks.",
-	".sssssss.",
-	".sshhhss.",
-	".sssssss.",
+	".hhhh.",
+	"hhhhhh",
+	"hssssh",
+	"skssks",
+	"ssssss",
+	".ssss.",
 ]
 
 enum Phase { TITLE, PLAY, RESULT }
@@ -518,9 +320,7 @@ var stomp_fx := 0.0              # 叫びの衝撃波（残り時間）
 const BLAST_TIME := 0.5
 var blast_at := Vector2.ZERO     # 衝撃波の中心（x: モデルpx, y: 高さ m）
 var blast_px := 0.0              # 衝撃波の半径（画面px）
-const C_SILK := P_LGREY   # 蜘蛛の糸の色
-var text_queue: Array = []        # この画面で描く文字（いちばん上の層に描く）
-var text_layer: Node2D
+const C_SILK := Color8(226, 224, 236)   # 蜘蛛の糸の色
 var ring_nope := 0.0
 var anim_h := 0.0                # 登りモーション用: 前のフレームの高さ
 var climb_phase := 0.0           # 登った距離で進むモーションの位相
@@ -568,7 +368,6 @@ func _ready() -> void:
 		sf.font_names = PackedStringArray(["Yu Gothic UI", "Meiryo", "Noto Sans CJK JP"])
 		font = sf
 	_setup_pad()
-	_setup_pico8_filter()
 	_load_tuning()
 	if FileAccess.file_exists(DIFF_PATH):
 		difficulty = clampi(int(FileAccess.get_file_as_string(DIFF_PATH)), 0, 2)
@@ -582,27 +381,6 @@ func _ready() -> void:
 	_load_ranking()
 	course = randi_range(1, 999)
 	_new_model()
-
-
-func _setup_pico8_filter() -> void:
-	# いちばん上に全画面の板を置き、描いた絵を PICO-8 の16色へ寄せる
-	var layer := CanvasLayer.new()
-	layer.layer = 100
-	var rect := ColorRect.new()
-	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
-	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var mat := ShaderMaterial.new()
-	mat.shader = load("res://shaders/pico8.gdshader")
-	rect.material = mat
-	layer.add_child(rect)
-	add_child(layer)
-	# 文字の層: フィルタより上。格子にそろえず、くっきり描く
-	var tl := CanvasLayer.new()
-	tl.layer = 101
-	text_layer = Node2D.new()
-	text_layer.draw.connect(_draw_text_layer)
-	tl.add_child(text_layer)
-	add_child(tl)
 
 
 func _new_model() -> void:
@@ -779,8 +557,6 @@ func _process(delta: float) -> void:
 	t += delta
 	if panel_open:
 		queue_redraw()
-		if text_layer:
-			text_layer.queue_redraw()
 		return
 	phase_t += delta
 	fx_shout = maxf(0.0, fx_shout - delta)
@@ -823,7 +599,7 @@ func _process(delta: float) -> void:
 			_on_shout(ghosts_before, x_before)
 		if prev_state == ThreadModel.State.AIR and model.state == ThreadModel.State.CLIMBING:
 			# 上の糸をつかんだ瞬間の火花
-			_burst(Vector2(_sx(model.x), _player_sy() - 22.0), 6, [P_WHITE], 40.0, 2.0, 0.3, 0.0)
+			_burst(Vector2(_sx(model.x), _player_sy() - 15.0), 14, [C_YELLOW, C_WHITE], 60.0, 1.0, 0.4, 0.0)
 		if model.hits > hits_before:
 			_burst(Vector2(_sx(model.x), _player_sy()), 30, [C_ORANGE, C_YELLOW, C_RED], 110.0, 2.0, 0.6, 60.0)
 			fx_hit = 0.5
@@ -898,8 +674,6 @@ func _process(delta: float) -> void:
 		p[3] += delta
 	popups = popups.filter(func(p): return p[3] < 1.2)
 	queue_redraw()
-	if text_layer:
-		text_layer.queue_redraw()
 
 
 func _load_ranking() -> void:
@@ -948,7 +722,7 @@ func _save_records() -> void:
 func _on_shout(n_ghosts: int, from_x: float) -> void:
 	var sp := Vector2(_sx(from_x), _sy(model.air_from))
 	var big := clampi(model.last_stones, 1, 6)
-	_burst(sp, 10 + big * 4, [P_WHITE, P_LGREY], 80.0 + big * 15.0, 2.0, 0.5, 0.0)   # 叫びの白い粒
+	_burst(sp, 20 + big * 10, [C_YELLOW, C_WHITE, C_ORANGE], 90.0 + big * 20.0, 2.0, 0.7, 0.0)   # 叫びの火花
 	# 衝撃波で消し飛んだ岩と鬼火
 	for b in model.last_blast:
 		var bp := Vector2(_sx(b.x), _sy(b.h))
@@ -976,7 +750,7 @@ func _drop_ghosts(n_ghosts: int, from_h: float, from_x: float, kicked := false) 
 	# kicked: 踏み台にされて真下へ蹴り落とされる（叫んだとき）
 	var py := _sy(from_h)
 	for i in range(n_ghosts):
-		var gy := py + 66.0 + i * GHOST_GAP
+		var gy := py + 46.0 + i * GHOST_GAP
 		if gy > H + 20.0:
 			break
 		var v := Vector2(randf_range(-110, 110), randf_range(-130, -30))
@@ -1071,7 +845,7 @@ func _draw_particles() -> void:
 		var a: float = clampf(p[2] / p[3], 0.0, 1.0)
 		var c: Color = p[4]
 		var sz: float = p[5]
-		_px(Rect2(roundf(p[0].x), roundf(p[0].y), sz, sz), Color(c, c.a * a))
+		draw_rect(Rect2(roundf(p[0].x), roundf(p[0].y), sz, sz), Color(c, c.a * a))
 
 
 # ---------------------------------------------------------------- 座標
@@ -1173,7 +947,6 @@ func _hint() -> Array:
 # ---------------------------------------------------------------- 描画
 
 func _draw() -> void:
-	text_queue.clear()
 	draw_off = Vector2.ZERO
 	if shake > 0.0:
 		draw_off = Vector2(roundf(randf_range(-1, 1) * shake * 4.0), roundf(randf_range(-1, 1) * shake * 4.0))
@@ -1188,73 +961,49 @@ func _draw() -> void:
 		draw_off = Vector2.ZERO
 		draw_set_transform(Vector2.ZERO)
 		if fx_hit > 0.0 and fmod(t, 0.1) < 0.05:
-			_px(Rect2(0, 0, FIELD_W, H), Color(C_RED, 0.25))
+			draw_rect(Rect2(0, 0, FIELD_W, H), Color(C_RED, 0.25))
 		if phase != Phase.TITLE:
 			_draw_map()
 			_draw_hud()
 		if phase == Phase.TITLE:
-			text_queue.clear()   # 下の景色の文字（目盛りなど）はタイトルで隠す
 			_draw_title()
 		elif phase == Phase.RESULT and phase_t > 0.9:
-			text_queue = text_queue.filter(func(q): return q[0].x >= FIELD_W)   # 盤面の文字は結果画面で隠す
 			_draw_result()
 	if won and phase_t < 0.9:   # 到達の瞬間の白い光
 		var fa := 1.0 - absf(phase_t - 0.35) / 0.55
-		_px(Rect2(0, 0, W, H), Color(1, 1, 0.95, clampf(fa, 0.0, 1.0)))
-		if fa > 0.5:
-			text_queue.clear()
+		draw_rect(Rect2(0, 0, W, H), Color(1, 1, 0.95, clampf(fa, 0.0, 1.0)))
 	if panel_open:
-		text_queue.clear()
 		_draw_panel()
 
 
-func _px(r: Rect2, col: Color) -> void:
-	# すべての四角を G ドットの格子にそろえて描く（細い線も G より細くならない）
-	var a := r.abs()
-	var x0 := floorf(a.position.x / G) * G
-	var y0 := floorf(a.position.y / G) * G
-	var x1 := maxf(ceilf(a.end.x / G) * G, x0 + G)
-	var y1 := maxf(ceilf(a.end.y / G) * G, y0 + G)
-	draw_rect(Rect2(x0, y0, x1 - x0, y1 - y0), col)
-
-
 func _spr(rows: Array, pos: Vector2, pal: Dictionary, flip := false, sc := 2) -> void:
-	# ドット絵を描く。pos はスプライトの中心、sc は 1 文字あたりのドット数（G の倍数）。左上を格子にそろえる
+	# ドット絵を描く。pos はスプライトの中心、sc は 1 文字あたりのドット数
 	var h := rows.size()
 	var w: int = rows[0].length()
-	var ox := roundf((pos.x - w * sc * 0.5) / G) * G
-	var oy := roundf((pos.y - h * sc * 0.5) / G) * G
+	var ox := roundf(pos.x - w * sc * 0.5)
+	var oy := roundf(pos.y - h * sc * 0.5)
 	for yy in range(h):
 		var row: String = rows[yy]
 		for xx in range(w):
 			var ch := row[w - 1 - xx] if flip else row[xx]
-			if ch == ".":
-				continue
-			if pal.has(ch):
+			if ch != "." and pal.has(ch):
 				draw_rect(Rect2(ox + xx * sc, oy + yy * sc, sc, sc), pal[ch])
-			elif DEF_PAL.has(ch):
-				draw_rect(Rect2(ox + xx * sc, oy + yy * sc, sc, sc), DEF_PAL[ch])
 
 
 func _draw_world() -> void:
 	# 背景: 高いほど地獄の赤 → 闇 → 極楽の金（帯で段階的に）
-	# 背景（セレステのエッセンス）: 黒地に、藍色の横長の雲がゆっくり流れるだけ。下のほうはマグマの照り返しで紫
-	_px(Rect2(0, 0, FIELD_W, H), P_BLACK)
-	for i in range(16):
-		var bw := 48.0 + float((i * 37) % 5) * 26.0
-		var bh := 8.0 + float(i % 3) * 6.0
-		var spd := 5.0 + float(i % 4) * 4.0
-		var by := fmod(i * 47.0 + cam_h * PPM * 0.3, H + 60.0) - 30.0
-		var bx := fmod(i * 97.0 + t * spd, FIELD_W + bw) - bw
-		var bc: Color = P_DPURP if by > H * 0.72 else P_DBLUE
-		_px(Rect2(bx, by, bw, bh), bc)
+	var r := clampf(cam_h / ThreadModel.GOAL, 0.0, 1.0)
+	var top := C_DARK.lerp(Color8(96, 76, 40), r)
+	var bot := C_BLOOD.lerp(C_DARK, r)
+	for i in range(9):
+		draw_rect(Rect2(0, i * 40, FIELD_W, 40), top.lerp(bot, i / 8.0))
 	# 舞い上がる火の粉
-	for i in range(24):   # 雪の代わりの火の粉: 小さな点がふわふわ上がる
-		var ex := fmod(i * 53.0 + sin(t * 0.8 + i) * 10.0, FIELD_W)
-		var ey := fmod(i * 71.0 - t * (8.0 + i % 5 * 4.0) + cam_h * PPM * 0.3, H)
+	for i in range(18):
+		var ex := fmod(i * 53.0 + sin(t + i) * 6.0, FIELD_W)
+		var ey := fmod(i * 71.0 - t * (12.0 + i % 5 * 4.0) + cam_h * PPM * 0.3, H)
 		if ey < 0:
 			ey += H
-		_px(Rect2(roundf(ex), roundf(ey), 2, 2), [P_WHITE, P_LGREY, P_ORANGE][i % 3])
+		draw_rect(Rect2(roundf(ex), roundf(ey), 1, 1), Color(C_ORANGE, 0.5))
 	# 遠景の針山（手前よりゆっくり流れる）
 	_draw_needle_mountains()
 	# 左右の崖（揺れられる範囲の外）
@@ -1265,26 +1014,26 @@ func _draw_world() -> void:
 	while m < cam_h + 70.0:
 		var y := _sy(m)
 		if m >= 0 and m <= ThreadModel.GOAL and y > -10 and y < H + 10:
-			_px(Rect2(4, y, 10, 1), Color(C_WHITE, 0.3))
+			draw_rect(Rect2(4, y, 10, 1), Color(C_WHITE, 0.3))
 			_label(Vector2(16, y + 6), "%dm" % m, 16, Color(C_WHITE, 0.35))
 		m += 25
 
 	# 地獄の地面（0m）。カンダタはここから登り始める
-	var ground_y := _sy(0.0) + 24.0
+	var ground_y := _sy(0.0) + 16.0
 	if ground_y < H:
-		_px(Rect2(0, ground_y, FIELD_W, H - ground_y), P_DPURP)
-		_px(Rect2(0, ground_y, FIELD_W, 3), P_PINK)
+		draw_rect(Rect2(0, ground_y, FIELD_W, H - ground_y), Color8(46, 26, 28))
+		draw_rect(Rect2(0, ground_y, FIELD_W, 2), Color8(96, 60, 52))
 		for i in range(0, int(FIELD_W), 6):   # でこぼこの地表
 			var bump := float((i * 13) % 4)
-			_px(Rect2(i, ground_y - bump, 6, bump), P_DPURP)
+			draw_rect(Rect2(i, ground_y - bump, 6, bump), Color8(70, 42, 40))
 		for i in range(9):   # ひび割れと、そこから漏れる赤い光
 			var cx2 := float((i * 53 + 17) % int(FIELD_W))
 			var cy2 := ground_y + 8.0 + float((i * 29) % 30)
-			_px(Rect2(cx2, cy2, 10, 1), Color(C_RED, 0.6 + 0.3 * sin(t * 2.0 + i)))
-			_px(Rect2(cx2 + 8, cy2 + 1, 6, 1), Color(C_RED, 0.5))
+			draw_rect(Rect2(cx2, cy2, 10, 1), Color(C_RED, 0.6 + 0.3 * sin(t * 2.0 + i)))
+			draw_rect(Rect2(cx2 + 8, cy2 + 1, 6, 1), Color(C_RED, 0.5))
 		for i in range(5):   # 小さな炎
 			var fx2 := float((i * 97 + 40) % int(FIELD_W))
-			_spr(SPR_FIRE[int(t * 8.0 + i) % 2], Vector2(fx2, ground_y - 4.0), {"y": C_YELLOW, "o": C_ORANGE, "w": C_RED}, i % 2 == 0, 2)
+			_spr(SPR_FIRE[int(t * 8.0 + i) % 2], Vector2(fx2, ground_y - 4.0), {"y": C_YELLOW, "o": C_ORANGE, "w": C_RED}, i % 2 == 0, 1)
 
 	# 極楽（ゴール）
 	var goal_y := _sy(ThreadModel.GOAL)
@@ -1297,8 +1046,13 @@ func _draw_world() -> void:
 		var oy := _sy(fp.y)
 		if oy < -20 or oy > H + 20:
 			continue
+		var cy0 := _sy(o.h)
+		if int(model.cfg.fire_mode) % 2 == 0:   # 円の軌道をうっすら
+			draw_arc(Vector2(_sx(o.cx), cy0), o.r * XS, 0, TAU, 24, Color(C_ORANGE, 0.15), 1.0)
+		else:   # 上下の軌道をうっすら
+			draw_rect(Rect2(_sx(o.cx), cy0 - 7.0 * PPM, 1, 14.0 * PPM), Color(C_ORANGE, 0.15))
 		var frame := int(t * 8.0 + o.phase) % 2
-		_spr(SPR_FIRE[frame], Vector2(_sx(fp.x), oy), {"y": C_YELLOW, "o": C_ORANGE, "w": C_WHITE}, o.w < 0.0, SC)
+		_spr(SPR_FIRE[frame], Vector2(_sx(fp.x), oy), {"y": C_YELLOW, "o": C_ORANGE, "w": C_WHITE}, o.w < 0.0)
 
 	# 崖の岩棚と、画面の端から走ってくる罪人
 	var cliff_l := _sx(-ThreadModel.X_LIMIT - ThreadModel.BODY_W)
@@ -1313,35 +1067,29 @@ func _draw_world() -> void:
 		# 岩棚: 画面の端から崖の縁まで続く道
 		var sx_a: float = 0.0 if left else lip - 6.0
 		var sw: float = lip + 6.0 if left else FIELD_W - lip + 6.0
-		# 罪人の岩棚は控えめに: 灰色の岩に白っぽいでこぼこの縁（溶岩の赤は鬼の岩棚だけ）
-		_px(Rect2(sx_a, py0, sw, 8), P_DGREY)
-		var lbx := sx_a
-		var lk := 0
-		while lbx < sx_a + sw:
-			_px(Rect2(lbx, py0 - (2.0 if lk % 2 == 0 else 0.0), 6, 2), P_LGREY)
-			lbx += 6.0
-			lk += 1
-		_px(Rect2(sx_a, py0 + 8, sw, 2), P_BLACK)
+		draw_rect(Rect2(sx_a, py0, sw, 5), C_CLIFF_D)
+		draw_rect(Rect2(sx_a, py0, sw, 1), C_CLIFF_L)
+		draw_rect(Rect2(lip - 2.0 if left else lip - 6.0, py0 + 5, 8, 2), C_CLIFF_D)
 		# 近づくと、端から縁へ走ってくる（飛びかかる位置まで）
 		var run_k := clampf((model.height - (pc.h - ThreadModel.SINNER_TRIGGER - 10.0)) / 10.0, 0.0, 1.0)
 		if run_k <= 0.0:
 			continue
 		for k in range(pc.n - pc.fired):
-			var start_x: float = -18.0 - k * 21.0 if left else FIELD_W + 18.0 + k * 21.0
-			var end_x: float = lip - 9.0 - k * 18.0 if left else lip + 9.0 + k * 18.0
+			var start_x: float = -12.0 - k * 14.0 if left else FIELD_W + 12.0 + k * 14.0
+			var end_x: float = lip - 6.0 - k * 12.0 if left else lip + 6.0 + k * 12.0
 			var sx0 := lerpf(start_x, end_x, run_k)
 			var running := run_k < 1.0
 			var frame: int = int(t * 10.0 + k) % 2 if running else 0
 			var spr: Array = SPR_GHOST_RUN if frame == 1 else SPR_GHOST
 			var bob: float = 0.0 if running else roundf(absf(sin(t * 6.0 + i + k)) * 2.0)
-			_spr(spr, Vector2(roundf(sx0), py0 - 19.0 - bob), _ghost_pal(i * 3 + k), left, SC)
+			_spr(spr, Vector2(roundf(sx0), py0 - 13.0 - bob), _ghost_pal(i * 3 + k), left)
 
 	# 飛びかかる罪人（外れたらそのまま落ちる）
 	for j in model.jumpers:
 		if j.state == 1:
 			continue
 		var left2: bool = j.side < 0.0
-		var p0 := Vector2(cliff_l if left2 else cliff_r, _sy(j.h0) - 19.0)
+		var p0 := Vector2(cliff_l if left2 else cliff_r, _sy(j.h0) - 13.0)
 		var p1 := Vector2(_sx(j.aim_x) + (8.0 if left2 else -8.0), _sy(j.target_h))
 		var pos: Vector2
 		var spr3: Array = SPR_GHOST
@@ -1353,7 +1101,7 @@ func _draw_world() -> void:
 			pos = p1 + Vector2((40.0 if left2 else -40.0) * a2, a2 * a2 * 500.0)
 			if int(a2 * 9.0) % 2 == 1:
 				spr3 = SPR_GHOST_RUN
-		_spr(spr3, pos.round(), _ghost_pal(int(j.h0)), not left2, SC)
+		_spr(spr3, pos.round(), _ghost_pal(int(j.h0)), not left2)
 
 	# 崖の鬼と、投げられた岩
 	var rr := ThreadModel.ROCK_R * XS
@@ -1363,43 +1111,47 @@ func _draw_world() -> void:
 		var hand0: Vector2 = model.rock_pos(rk, -1.0)
 		var hx := _sx(hand0.x)
 		var hy := _sy(hand0.y)
-		var oni_c := Vector2(hx - rk.side * 10.0, hy + 45.0)
-		var feet := oni_c.y + 23.0
+		var oni_c := Vector2(hx - rk.side * 4.0, hy + rr + 19.0)
+		var feet := oni_c.y + 15.0
 		var lip3: float = cliff_l if left3 else cliff_r
 		# 鬼は振りかぶってから投げ、少しして岩棚の奥へ引っこむ
 		var show_oni: bool = tau < 0.9
 		if show_oni and feet > -20.0 and oni_c.y - 40.0 < H:
 			var sx_b: float = 0.0 if left3 else lip3 - 10.0
 			var sw2: float = lip3 + 10.0 if left3 else FIELD_W - lip3 + 10.0
+			draw_rect(Rect2(sx_b, feet, sw2, 5), C_CLIFF_D)
+			draw_rect(Rect2(sx_b, feet, sw2, 1), C_CLIFF_L)
 			var rise := clampf(rk.t / 0.15, 0.0, 1.0)            # 岩棚の下から現れる
 			var sink := clampf((tau - 0.6) / 0.3, 0.0, 1.0)      # 投げたあと引っこむ
-			var off := roundf((1.0 - rise + sink) * 27.0)
+			var off := roundf((1.0 - rise + sink) * 18.0)
 			# 岩棚より下にはみ出さないように切り取る代わりに、岩棚の色で隠す
 			var spr2: Array = SPR_ONI_UP if tau <= 0.0 else SPR_ONI_THROW
-			_spr(spr2, oni_c + Vector2(0, off), ONI_PAL, not left3, SC)
+			_spr(spr2, oni_c + Vector2(0, off), ONI_PAL, not left3)
 			if off > 0.0:   # 岩棚の下に隠れている部分を、崖の色で覆う
-				_px(Rect2(oni_c.x - 20.0, feet + 1.0, 40, off + 2.0), P_DGREY)
-			_draw_lava_ledge(sx_b, feet, sw2)
+				draw_rect(Rect2(oni_c.x - 14.0, feet + 1.0, 28, off + 2.0), C_CLIFF_D)
+			draw_rect(Rect2(sx_b, feet, sw2, 4), C_CLIFF_D)
+			draw_rect(Rect2(sx_b, feet, sw2, 1), C_CLIFF_L)
 		if tau <= 0.0:
 			# 振りかぶり中: 頭上の岩と、飛んでいく道筋（赤い点線）
 			var shake2 := roundf(sin(t * 50.0) * 1.0)
-			var hold := Vector2(hx + shake2, hy + roundf((1.0 - clampf(rk.t / 0.15, 0.0, 1.0)) * 27.0))
-			_spr(SPR_ROCK[0], hold, ROCK_PAL, false, 2)
+			var hold := Vector2(hx + shake2, hy + roundf((1.0 - clampf(rk.t / 0.15, 0.0, 1.0)) * 18.0))
+			draw_circle(hold, rr + 1.0, C_BLACK)
+			draw_circle(hold, rr, C_ROCK)
+			draw_circle(hold + Vector2(2, 2), rr * 0.6, C_ROCK_D)
 			var pulse := 0.55 + 0.45 * absf(sin(t * 10.0))
 			var k3 := 0.0
 			var f: float = model.cfg.rock_flight
 			while k3 < f * 1.8:
 				var pp: Vector2 = model.rock_pos(rk, k3)
 				var dpos := Vector2(_sx(pp.x), _sy(pp.y)).round()
-				if pulse > 0.4 or int(k3 / 0.06) % 2 == 0:   # 点滅は 16色のまま（半透明にしない）
-					_px(Rect2(dpos.x - 1, dpos.y - 1, 3, 3), P_BLACK)
-					_px(Rect2(dpos.x, dpos.y, 2, 2), P_RED if pulse > 0.75 else P_PINK)
+				draw_rect(Rect2(dpos.x - 2, dpos.y - 2, 4, 4), Color(C_BLACK, 0.5 * pulse))
+				draw_rect(Rect2(dpos.x - 1, dpos.y - 1, 3, 3), Color(C_RED, pulse))
 				k3 += 0.06
 			if hy < 6.0 and fmod(t, 0.3) < 0.2:   # 画面の上にいる鬼の予告
 				var wx := clampf(hx, 10.0, FIELD_W - 10.0)
-				_px(Rect2(wx - 5, 2, 11, 2), C_RED)
-				_px(Rect2(wx - 3, 4, 7, 2), C_RED)
-				_px(Rect2(wx - 1, 6, 3, 2), C_RED)
+				draw_rect(Rect2(wx - 5, 2, 11, 2), C_RED)
+				draw_rect(Rect2(wx - 3, 4, 7, 2), C_RED)
+				draw_rect(Rect2(wx - 1, 6, 3, 2), C_RED)
 				_label(Vector2(wx, 26), "！", 16, C_RED, HORIZONTAL_ALIGNMENT_CENTER)
 			elif hy > 0.0:
 				_label(Vector2(hx, hy - rr - 8.0), "！", 16, C_RED, HORIZONTAL_ALIGNMENT_CENTER)
@@ -1408,14 +1160,20 @@ func _draw_world() -> void:
 		var rkx: float = _sx(rk.x)
 		if rky < -20.0 or rky > H + 20.0:
 			continue
-		# 飛んでくる岩: 2コマで回りながら飛ぶ
-		var rf := int(tau * 10.0) % 2
-		_spr(SPR_ROCK[rf], Vector2(rkx, rky), ROCK_PAL, rk.side > 0.0, 2)
+		# 飛んでくる岩: 進む向きの後ろにうっすら残像
+		var back: Vector2 = model.rock_pos(rk, maxf(tau - 0.06, 0.0))
+		var bpos := Vector2(_sx(back.x), _sy(back.y))
+		draw_circle(bpos, rr, Color(C_WHITE, 0.12))
+		draw_circle(Vector2(rkx, rky), rr + 1.0, C_BLACK)
+		draw_circle(Vector2(rkx, rky), rr, C_ROCK)
+		var spin: float = tau * 12.0 * -rk.side
+		draw_circle(Vector2(rkx, rky) + Vector2(cos(spin), sin(spin)) * 3.0, rr * 0.55, C_ROCK_D)
+		draw_rect(Rect2(rkx + cos(spin + 2.5) * 5.0 - 1.0, rky + sin(spin + 2.5) * 5.0 - 1.0, 3, 3), C_ROCK_L)
 
 	# 糸（上側）: 天から手元へ
 	var py := _player_sy()
 	var px := _sx(model.x)
-	var hand := Vector2(px, py - 22.0)
+	var hand := Vector2(px, py - 15.0)
 	var thread_top := Vector2(THREAD_X, maxf(goal_y - 52.0, -4.0))   # 蜘蛛から垂れる
 	# 糸の色は上下で同じ。傷むほど少しずつ赤みが差し、切れそうになると赤く点滅
 	var tc := C_SILK
@@ -1423,17 +1181,17 @@ func _draw_world() -> void:
 		tc = C_SILK.lerp(C_RED, (1.0 - model.durability / ThreadModel.DURABILITY_MAX) * 0.7)
 		if model.time_to_snap(true, false) < 1.3 and fmod(t, 0.3) < 0.15:
 			tc = C_RED
-	draw_line(thread_top, hand, tc, 2.0)
+	draw_line(thread_top, hand, tc, 1.0)
 
 	# 糸（下側）と罪人と、糸の耐久度の○ゲージ
 	if model.state == ThreadModel.State.CLIMBING:
 		var snap := model.time_to_snap(true, model.dashing)
 		# 下に余っている糸は、切った所（下端）まで。登るほど伸びていく
-		var end_y := minf(_sy(model.thread_end) - 22.0, H + 20.0)
+		var end_y := minf(_sy(model.thread_end) - 15.0, H + 20.0)
 		var pts := PackedVector2Array([hand])
 		var i := 0.0
-		while py + 27.0 + i * GHOST_GAP < end_y:
-			pts.append(Vector2(_gx(model.x, i), py + 27.0 + i * GHOST_GAP))
+		while py + 18.0 + i * GHOST_GAP < end_y:
+			pts.append(Vector2(_gx(model.x, i), py + 18.0 + i * GHOST_GAP))
 			i += 1.0
 		if end_y > hand.y and end_y < H:
 			var last: Vector2 = pts[pts.size() - 1]
@@ -1442,22 +1200,22 @@ func _draw_world() -> void:
 				tip = last.lerp(Vector2(last.x, end_y), 1.0)
 			pts.append(tip)
 			if pts.size() >= 2:
-				draw_polyline(pts, tc, 2.0)
+				draw_polyline(pts, tc, 1.0)
 			# ちぎれた端のほつれ
-			_px(Rect2(tip.x - 1, tip.y, 1, 2), Color(tc, 0.7))
-			_px(Rect2(tip.x + 1, tip.y + 1, 1, 2), Color(tc, 0.7))
+			draw_rect(Rect2(tip.x - 1, tip.y, 1, 2), Color(tc, 0.7))
+			draw_rect(Rect2(tip.x + 1, tip.y + 1, 1, 2), Color(tc, 0.7))
 		else:
 			if pts.size() >= 2:
-				draw_polyline(pts, tc, 2.0)
+				draw_polyline(pts, tc, 1.0)
 		for g in range(int(model.ghosts)):
-			var gy := py + 66.0 + g * GHOST_GAP
+			var gy := py + 46.0 + g * GHOST_GAP
 			if gy > H + 10.0:
 				break
 			var side := g % 2 == 0
-			_spr(SPR_GHOST, Vector2(_gx(model.x, g + 3) + (12.0 if side else -12.0), gy), _ghost_pal(g), not side, SC)
+			_spr(SPR_GHOST, Vector2(_gx(model.x, g + 3) + (8.0 if side else -8.0), gy), _ghost_pal(g), not side)
 		# ○ゲージは頭の上、天へ伸びる糸の上に付ける
 		var top_pt := thread_top
-		var ring_c := (hand + (top_pt - hand).normalized() * 26.0).round()
+		var ring_c := (hand + (top_pt - hand).normalized() * 20.0).round()
 		_draw_ring(ring_c, snap)
 
 	# ちぎれて落ちていく糸
@@ -1465,11 +1223,11 @@ func _draw_world() -> void:
 		var age: float = th[2]
 		var ty: float = _sy(th[0]) + roundf(age * age * 450.0)
 		var tx: float = _sx(th[1])
-		draw_line(Vector2(tx, ty), Vector2(tx + roundf(5.0 * age), ty + 350.0), Color(C_RED, maxf(0.0, 1.0 - age * 0.6)), 2.0)
+		draw_line(Vector2(tx, ty), Vector2(tx + roundf(5.0 * age), ty + 350.0), Color(C_RED, maxf(0.0, 1.0 - age * 0.6)), 1.0)
 	for f in falling_ghosts:   # 落ちていく罪人（手足をばたつかせて、そのまま落下）
 		var fr: int = int(f[2] * 1.5) % 2
 		var fp: Vector2 = f[0]
-		_spr(SPR_GHOST_RUN if fr == 1 else SPR_GHOST, fp.round(), _ghost_pal(int(f[3]) if f.size() > 3 else 0), fr == 1, SC)
+		_spr(SPR_GHOST_RUN if fr == 1 else SPR_GHOST, fp.round(), _ghost_pal(int(f[3]) if f.size() > 3 else 0), fr == 1)
 
 	# カンダタ
 	if not (model.invuln_left > 0.0 and fmod(t, 0.16) < 0.08):
@@ -1483,12 +1241,12 @@ func _draw_world() -> void:
 		var rr2 := roundf(blast_px * grow)
 		var fade := 1.0 - maxf(bk - 0.45, 0.0) / 0.55
 		draw_circle(bc, rr2, Color(C_WHITE, 0.18 * fade))
-		draw_arc(bc, rr2, 0, TAU, 48, Color(C_YELLOW, fade), 2.0)
-		draw_arc(bc, maxf(rr2 - 6.0, 0.0), 0, TAU, 48, Color(C_WHITE, 0.6 * fade), 2.0)
+		draw_arc(bc, rr2, 0, TAU, 48, Color(C_YELLOW, fade), 3.0)
+		draw_arc(bc, maxf(rr2 - 6.0, 0.0), 0, TAU, 48, Color(C_WHITE, 0.6 * fade), 1.0)
 		for k in range(16):   # 放射状の線
 			var ang := TAU * k / 16.0 + 0.2
 			var r0 := rr2 * 0.55
-			draw_line(bc + Vector2(cos(ang), sin(ang)) * r0, bc + Vector2(cos(ang), sin(ang)) * rr2, Color(C_WHITE, 0.5 * fade), 2.0)
+			draw_line(bc + Vector2(cos(ang), sin(ang)) * r0, bc + Vector2(cos(ang), sin(ang)) * rr2, Color(C_WHITE, 0.5 * fade), 1.0)
 
 	# 叫び演出
 	if fx_shout > 0.0:
@@ -1510,46 +1268,46 @@ func _draw_world() -> void:
 		var ta := clampf(minf(tip_t / 0.25, (TIP_TIME - tip_t) / 0.4), 0.0, 1.0)
 		var tw2 := font.get_string_size(tip_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
 		var tx := roundf(FIELD_W * 0.5 - tw2 * 0.5)
-		_px(Rect2(tx - 8, H - 26, tw2 + 16, 20), Color(C_BLACK, 0.65 * ta))
+		draw_rect(Rect2(tx - 8, H - 26, tw2 + 16, 20), Color(C_BLACK, 0.65 * ta))
 		_label(Vector2(tx, H - 10), tip_text, 16, Color(C_WHITE, ta))
 
 
-const C_CLIFF := P_DBLUE
-const C_CLIFF_D := P_DGREY
-const C_CLIFF_L := P_LGREY
+const C_CLIFF := Color8(58, 40, 40)
+const C_CLIFF_D := Color8(36, 24, 26)
+const C_CLIFF_L := Color8(92, 66, 60)
 
 
 func _draw_lava() -> void:
 	# 下から迫るマグマ。地面より下にいるうちは、地面の割れ目から光が漏れるだけ
 	var top := _sy(model.lava_h)
-	var ground_y := _sy(0.0) + 24.0
+	var ground_y := _sy(0.0) + 16.0
 	if model.lava_h < 0.0:
 		if ground_y < H:
 			var glow := clampf(1.0 - (-model.lava_h) / 40.0, 0.0, 1.0)
 			for i in range(0, int(FIELD_W), 23):
 				var cy := ground_y + 6.0 + float((i * 7) % 20)
 				if cy < H:
-					_px(Rect2(i, cy, 8 + (i % 3) * 3, 1), Color(C_ORANGE, 0.25 + 0.6 * glow * (0.6 + 0.4 * sin(t * 4.0 + i))))
+					draw_rect(Rect2(i, cy, 8 + (i % 3) * 3, 1), Color(C_ORANGE, 0.25 + 0.6 * glow * (0.6 + 0.4 * sin(t * 4.0 + i))))
 		return
 	if top > H + 8.0:
 		return
 	# 熱気: 上へ行くほど薄くなる橙の層（ゆらゆら）
 	for i in range(10):
 		var hy := top - 4.0 - i * 5.0
-		_px(Rect2(0, hy + roundf(sin(t * 2.0 + i) * 1.0), FIELD_W, 5), Color(C_ORANGE, 0.16 - i * 0.015))
+		draw_rect(Rect2(0, hy + roundf(sin(t * 2.0 + i) * 1.0), FIELD_W, 5), Color(C_ORANGE, 0.16 - i * 0.015))
 	# 本体: 深いところほど暗い赤
-	var depth_cols := [P_RED, P_RED, P_DPURP, P_DPURP, P_DBLUE]
+	var depth_cols := [C_RED, Color8(170, 30, 24), Color8(130, 20, 22), C_BLOOD, Color8(70, 10, 16)]
 	for i in range(5):
-		_px(Rect2(0, top + 4.0 + i * 8.0, FIELD_W, 8 if i < 4 else H - top + 10.0), depth_cols[i])
+		draw_rect(Rect2(0, top + 4.0 + i * 8.0, FIELD_W, 8 if i < 4 else H - top + 10.0), depth_cols[i])
 	# 表面: 二つの波を重ねた、うねる縁
 	var x := 0.0
 	while x < FIELD_W:
 		var w1 := sin(x * 0.07 + t * 2.6) * 2.5 + sin(x * 0.023 - t * 1.7) * 3.0
 		var wy := roundf(top + w1)
-		_px(Rect2(x, wy - 1.0, 2, 3), C_YELLOW)
-		_px(Rect2(x, wy + 2.0, 2, 4), C_ORANGE)
+		draw_rect(Rect2(x, wy - 1.0, 2, 3), C_YELLOW)
+		draw_rect(Rect2(x, wy + 2.0, 2, 4), C_ORANGE)
 		if int(x * 0.5 + t * 30.0) % 19 < 2:
-			_px(Rect2(x, wy - 2.0, 2, 1), C_WHITE)   # きらめき
+			draw_rect(Rect2(x, wy - 2.0, 2, 1), C_WHITE)   # きらめき
 		x += 2.0
 	# 表面を流れる黒い固まり（冷えた溶岩）と、その割れ目の光
 	for k in range(9):
@@ -1559,15 +1317,15 @@ func _draw_lava() -> void:
 		cx -= 30.0
 		var cw := 14.0 + float(k % 4) * 6.0
 		var cy2 := top + 7.0 + float(k % 3) * 7.0
-		_px(Rect2(roundf(cx), roundf(cy2), cw, 3), P_DPURP)
-		_px(Rect2(roundf(cx + cw * 0.4), roundf(cy2 + 1.0), 3, 1), C_ORANGE)
+		draw_rect(Rect2(roundf(cx), roundf(cy2), cw, 3), Color8(60, 14, 14))
+		draw_rect(Rect2(roundf(cx + cw * 0.4), roundf(cy2 + 1.0), 3, 1), C_ORANGE)
 	# 泡: ふくらんで、はじける
 	for k in range(7):
 		var bx := fmod(k * 89.0 + 23.0 + floorf(t * 0.6 + k * 0.31) * 137.0, FIELD_W)
 		var ph := fmod(t * 0.6 + k * 0.31, 1.0)
 		if ph < 0.35:
 			var rr := 1.0 + ph * 14.0
-			draw_arc(Vector2(bx, top + 2.0), rr, PI, TAU, 10, C_YELLOW, 2.0)
+			draw_arc(Vector2(bx, top + 2.0), rr, PI, TAU, 10, C_YELLOW, 1.0)
 			draw_circle(Vector2(bx, top + 3.0), rr - 1.0, Color(C_ORANGE, 0.8))
 
 
@@ -1578,192 +1336,123 @@ func _draw_heat_edge() -> void:
 		return
 	var k := clampf(1.0 - gap / 25.0, 0.0, 1.0) * (0.6 + 0.4 * absf(sin(t * 6.0)))
 	for i in range(8):
-		_px(Rect2(0, H - 8.0 - i * 6.0, FIELD_W, 6), Color(C_RED, 0.3 * k * (1.0 - i / 8.0)))
-		_px(Rect2(i * 4.0, 0, 4, H), Color(C_RED, 0.12 * k * (1.0 - i / 8.0)))
-		_px(Rect2(FIELD_W - 4.0 - i * 4.0, 0, 4, H), Color(C_RED, 0.12 * k * (1.0 - i / 8.0)))
+		draw_rect(Rect2(0, H - 8.0 - i * 6.0, FIELD_W, 6), Color(C_RED, 0.3 * k * (1.0 - i / 8.0)))
+		draw_rect(Rect2(i * 4.0, 0, 4, H), Color(C_RED, 0.12 * k * (1.0 - i / 8.0)))
+		draw_rect(Rect2(FIELD_W - 4.0 - i * 4.0, 0, 4, H), Color(C_RED, 0.12 * k * (1.0 - i / 8.0)))
 
 
 func _cliff_edge(world_y: float, left: bool) -> float:
-	# 崖の縁: 45度の斜めの出っぱり（セレステの岩の切り口）。世界の高さに固定
-	var u := world_y * PPM
-	var seg := floori(u / 24.0)
-	var hsh := absi(seg * 73 + (11 if left else 37)) % 5
-	var local := fmod(u, 24.0)
-	if local < 0.0:
-		local += 24.0
-	var off := 0.0
-	if hsh >= 2:
-		off = 12.0 - absf(local - 12.0)          # 傾き1 = 45度
-		if hsh == 4:
-			off = minf(off, 6.0) + 6.0           # 台形
+	# 崖の縁のでこぼこ（世界の高さに固定。登っても形が流れていくように）
+	var n := sin(world_y * 0.9 + (0.0 if left else 2.0)) * 3.0 + sin(world_y * 0.23 + (1.0 if left else 4.0)) * 5.0
 	var base: float = _sx(-ThreadModel.X_LIMIT - ThreadModel.BODY_W) if left else _sx(ThreadModel.X_LIMIT + ThreadModel.BODY_W)
-	return roundf(base + (off if left else -off))
+	return roundf(base + (n - 4.0 if left else -n + 4.0))
 
 
 func _draw_cliffs() -> void:
-	# 灰色の大きな岩。ところどころ黒い四角の穴
 	for side in [true, false]:
 		var left: bool = side
 		var yy := 0.0
 		while yy < H:
-			var wy := (PLAYER_SY - yy) / PPM + cam_h
+			var wy := (PLAYER_SY - yy) / PPM + cam_h   # この行の世界の高さ（m）
 			var ex := _cliff_edge(wy, left)
 			var x0: float = 0.0 if left else ex
 			var w: float = ex if left else FIELD_W - ex
-			_px(Rect2(x0, yy, w, 2), P_DGREY)
+			# 岩の地層: 世界に固定した横縞
+			var band := int(floorf(wy / 2.5)) % 3
+			var col: Color = [C_CLIFF, C_CLIFF_D, Color8(48, 32, 34)][band]
+			draw_rect(Rect2(x0, yy, w, 2), col)
+			# 縁の明るい面と影
+			draw_rect(Rect2(ex - 3.0 if left else ex, yy, 3, 2), C_CLIFF_L if left else C_CLIFF_D)
+			draw_rect(Rect2(ex if left else ex - 2.0, yy, 2, 2), Color(C_BLACK, 0.35))
 			yy += 2.0
-		var m0 := floori((cam_h - 80.0) / 4.0)
-		for k in range(m0, m0 + 60):
-			var hsh := absi(k * 7919 + (3 if left else 5)) % 11
-			if hsh > 3:
-				continue
-			var cy := _sy(float(k) * 4.0)
-			var span := 60.0
-			var cx: float = (6.0 + float((k * 37) % int(span))) if left else (FIELD_W - 12.0 - float((k * 41) % int(span)))
-			var sz := 4.0 if hsh < 3 else 8.0
-			_px(Rect2(cx, cy, sz, sz), P_BLACK)
-
-
-func _draw_lava_ledge(x: float, y: float, w: float) -> void:
-	# 溶岩のかたまり（セレステの氷のかたまりの代わり）: 赤い塊に、明るいもこもこの縁
-	_px(Rect2(x, y, w, 10), P_RED)
-	_px(Rect2(x, y, w, 2), P_PEACH)
-	var bx := x
-	var k := 0
-	while bx < x + w:
-		if k % 2 == 0:
-			_px(Rect2(bx, y - 2, 4, 2), P_PEACH)
-		if k % 3 == 1:
-			_px(Rect2(bx + 1, y + 5, 2, 2), P_ORANGE)
-		bx += 6.0
-		k += 1
-	_px(Rect2(x, y + 10, w, 2), P_DPURP)
+		# ひび割れ（世界に固定）
+		var m0 := floori(cam_h - 70.0)
+		for k in range(m0, m0 + 140, 7):
+			var cy := _sy(float(k))
+			var cx: float = (8.0 + float((k * 37) % 50)) if left else (FIELD_W - 10.0 - float((k * 41) % 50))
+			draw_rect(Rect2(cx, cy, 6, 1), C_CLIFF_D)
+			draw_rect(Rect2(cx + 5, cy + 1, 4, 1), C_CLIFF_D)
 
 
 func _draw_needle_mountains() -> void:
-	# 針の山: とがった山の影に、白い針がびっしり立つ。登るほど下へ遠ざかる
-	var base := PLAYER_SY + 40.0 + cam_h * PPM * 0.3
-	if base - 160.0 > H:
+	var base := PLAYER_SY + 40.0 + cam_h * PPM * 0.3   # 登るほど下へ遠ざかる
+	if base - 140.0 > H:
 		return
 	for layer in range(2):
 		var far := layer == 0
-		var col := P_DBLUE if far else P_DPURP
-		var needle := P_LAV if far else P_WHITE
-		var lb := base + (0.0 if far else 34.0)
-		var peaks := 7 if far else 9
-		var span := FIELD_W / peaks
-		for k in range(peaks + 1):
-			var px := k * span + (span * 0.5 if far else 0.0) - span * 0.5
-			var ph := (90.0 if far else 60.0) + float((k * 37 + layer * 11) % 5) * 12.0
-			var tip := Vector2(roundf(px + span * 0.5), roundf(lb - ph))
-			draw_colored_polygon(PackedVector2Array([Vector2(px, lb + 200.0), tip, Vector2(px + span, lb + 200.0)]), col)
-			# 斜面に沿って針を立てる
-			var steps := int(ph / 6.0)
-			for st in range(1, steps):
-				var f := float(st) / steps
-				var ly := roundf(lerpf(tip.y, lb, f))
-				var half := span * 0.5 * f
-				var nl := 3.0 + float((st * 7 + k) % 4)
-				_px(Rect2(roundf(tip.x - half), ly - nl, 1, nl), needle)
-				_px(Rect2(roundf(tip.x + half), ly - nl, 1, nl), needle)
-			_px(Rect2(tip.x, tip.y - 6.0, 1, 6), needle)
+		var col := Color8(36, 16, 22) if far else Color8(22, 10, 14)
+		var needle := Color8(120, 104, 112) if far else Color8(176, 166, 172)
+		var lb := base + (0.0 if far else 30.0)
+		var x := 0.0
+		while x < FIELD_W:
+			var hh := 70.0 + 70.0 * absf(sin((x + layer * 70.0) * 0.016)) + 18.0 * sin(x * 0.05 + layer)
+			if not far:
+				hh *= 0.6
+			var top := roundf(lb - hh)
+			draw_rect(Rect2(x, top, 2, H - top + 40.0), col)
+			# 針: 山肌から上へ突き出す
+			if int(x) % 4 == 0:
+				var nl := 5.0 + float(int(x * 7.0) % 6)
+				draw_rect(Rect2(x, top - nl, 1, nl), needle)
+			x += 2.0
 
 
 func _draw_goal(goal_y: float) -> void:
-	# 極楽への入り口 = 極楽の蓮池の底。岩の天井の穴から見上げると、澄んだ水と蓮の葉の影、
-	# その向こうの光が見える（原作では、お釈迦様が蓮池の水越しに地獄をのぞいて糸を下ろす）
+	# 極楽への入り口: 岩の天井に穴が開いていて、その上の雲から糸が垂れている
 	var ceil_top := goal_y - 46.0
 	var ceil_bot := goal_y - 6.0
-	var surf := goal_y - 150.0          # 池の水面（下から見上げた面）
-	if surf > -400.0:
-		_px(Rect2(0, -400, FIELD_W, surf + 400.0), P_WHITE)       # 水面の向こう: 極楽の光
-		_px(Rect2(0, surf - 10.0, FIELD_W, 10), P_PEACH)
-	# 水: 水面に近いほど明るい青、天井に近いほど深い藍
-	var yy := surf
-	while yy < ceil_bot:
-		var k := clampf((yy - surf) / (ceil_bot - surf), 0.0, 1.0)
-		_px(Rect2(0, yy, FIELD_W, 4), P_BLUE if k < 0.4 else P_DBLUE)
-		yy += 4.0
-	# 水面のゆらめき
-	var x := 0.0
-	while x < FIELD_W:
-		var wy := roundf(surf + sin(x * 0.09 + t * 2.0) * 1.5)
-		_px(Rect2(x, wy, 2, 2), P_WHITE)
-		x += 2.0
-	# 水の中の光の網（コースティクス）
-	for i in range(18):
-		var cx := fmod(i * 67.0 + t * (6.0 + i % 4 * 3.0), FIELD_W + 40.0) - 20.0
-		var cy := surf + 8.0 + float((i * 29) % int(maxf(ceil_top - surf - 16.0, 8.0)))
-		var near := (cy - surf) / maxf(ceil_top - surf, 1.0) < 0.45
-		_px(Rect2(roundf(cx), roundf(cy + sin(t * 2.0 + i) * 2.0), 6 + i % 3 * 3, 1), P_WHITE if near else P_BLUE)
-	# 蓮の葉（下から見ると黒い影）と、水中へ垂れる茎
-	var leaves := [40.0, 120.0, 210.0, 400.0, 480.0, 570.0]
-	for i in range(leaves.size()):
-		var lx: float = leaves[i] + sin(t * 0.6 + i) * 3.0
-		var lw := 22.0 + float(i % 3) * 6.0
-		for row in range(4):
-			var hw := roundf(lw * sqrt(1.0 - pow((row - 1.5) / 2.0, 2.0)))
-			_px(Rect2(roundf(lx - hw), surf + 1.0 + row, hw * 2.0, 1), P_DGREEN)
-		_px(Rect2(roundf(lx), surf + 5.0, 1, 30.0 + float(i % 3) * 18.0), P_DGREEN)
-	# 水面の上に咲く白い蓮
-	for i in range(3):
-		var fx: float = [160.0, 440.0, 540.0][i]
-		_spr(SPR_LOTUS_FLOWER, Vector2(fx, surf - 9.0), {"p": P_LGREY, "P": P_WHITE, "y": P_YELLOW, "g": P_DGREEN}, false, SC)
-	# 穴から差し込む光の筋（細い縦線を間引いて、ドットらしく）
-	for k in range(-9, 10):
-		var x0 := THREAD_X + k * 5.0
-		var len := 140.0 - absf(k) * 6.0 + sin(t * 2.0 + k) * 12.0
-		var spread_x := k * 2.5
-		var step := 0.0
-		while step < len:
-			var f := step / len
-			if int(step / 2.0) % (2 if f < 0.5 else 3) == 0:
-				_px(Rect2(roundf(x0 + spread_x * f * 4.0), ceil_bot + step, 1, 2), P_BLUE if f < 0.6 else P_DBLUE.lerp(P_BLUE, 1.0 - f))
-			step += 2.0
+	# 天井より上は青空
+	for i in range(6):
+		var by := ceil_bot - (i + 1) * 30.0
+		draw_rect(Rect2(0, by, FIELD_W, 30), C_SKY_LO.lerp(C_SKY_HI, i / 5.0))
+	if ceil_bot - 180.0 > -400.0:
+		draw_rect(Rect2(0, -400, FIELD_W, ceil_bot - 180.0 + 400.0), C_SKY_HI)
+	# 穴から差し込む光
+	for k in range(3):
+		var spread := 40.0 + k * 34.0
+		draw_colored_polygon(PackedVector2Array([Vector2(THREAD_X - 50, ceil_bot), Vector2(THREAD_X + 50, ceil_bot),
+				Vector2(THREAD_X + 50 + spread, ceil_bot + 220), Vector2(THREAD_X - 50 - spread, ceil_bot + 220)]),
+				Color(C_SKY_LO, 0.07))
+	for k in range(5):
+		var rx := THREAD_X - 40.0 + k * 20.0 + sin(t * 1.3 + k) * 3.0
+		draw_rect(Rect2(roundf(rx), ceil_bot, 2, 160), Color(C_CLOUD, 0.05 + 0.03 * sin(t * 2.0 + k * 1.7)))
 	# 岩の天井（穴は下ほど広い）
-	yy = ceil_top
+	var yy := ceil_top
 	while yy < ceil_bot:
 		var k := (yy - ceil_top) / (ceil_bot - ceil_top)
 		var hw := roundf(46.0 + 20.0 * k + sin(yy * 0.7) * 3.0)
-		var col: Color = P_BLACK if k < 0.5 else P_DBLUE
-		_px(Rect2(0, yy, THREAD_X - hw, 2), col)
-		_px(Rect2(THREAD_X + hw, yy, FIELD_W - THREAD_X - hw, 2), col)
-		_px(Rect2(THREAD_X - hw - 2.0, yy, 2, 2), P_LAV)   # 穴のふち
-		_px(Rect2(THREAD_X + hw, yy, 2, 2), P_LAV)
+		var col := C_ROCK_D.lerp(C_ROCK, k)
+		draw_rect(Rect2(0, yy, THREAD_X - hw, 2), col)
+		draw_rect(Rect2(THREAD_X + hw, yy, FIELD_W - THREAD_X - hw, 2), col)
 		yy += 2.0
-	_px(Rect2(0, ceil_top - 2, FIELD_W, 2), P_DGREY)
-	for i in range(0, int(FIELD_W), 8):   # 天井の下側のギザギザ
-		if absf(i + 4.0 - THREAD_X) < 70.0:
+	# 天井の下側のギザギザ
+	for i in range(0, int(FIELD_W), 8):
+		var cx := float(i)
+		if absf(cx + 4.0 - THREAD_X) < 70.0:
 			continue
 		var dh := 2.0 + float((i * 7) % 5) * 2.0
-		_px(Rect2(i, ceil_bot, 8, dh), P_DBLUE)
-		_px(Rect2(i + 2, ceil_bot + dh, 4, 2), P_BLACK)
-	# 蜘蛛と、水面へ続く糸
-	var spy := goal_y - 61.0 + roundf(sin(t * 2.0))
-	_px(Rect2(THREAD_X, surf, 1, spy - surf), P_LGREY)
-	_spr(SPR_SPIDER, Vector2(THREAD_X, spy), {"l": P_WHITE, "b": P_DGREY, "e": P_RED}, false, SC)
+		draw_rect(Rect2(cx, ceil_bot, 8, dh), C_ROCK)
+		draw_rect(Rect2(cx + 2, ceil_bot + dh, 4, 2), C_ROCK_D)
+	draw_rect(Rect2(0, ceil_top - 2, FIELD_W, 2), Color(C_BLACK, 0.4))
+	# 雲（穴の向こうの景色）と、穴にいる蜘蛛（糸はここから垂れている）
+	_spr(SPR_CLOUD, Vector2(THREAD_X - 70 + roundf(sin(t * 0.5) * 4.0), goal_y - 80.0), {"w": C_CLOUD, "s": C_CLOUD_S})
+	draw_rect(Rect2(THREAD_X, ceil_top - 30.0, 1, 18), Color(C_WHITE, 0.6))
+	_spr(SPR_SPIDER, Vector2(THREAD_X, goal_y - 52.0 - 9.0 + roundf(sin(t * 2.0))), {"l": C_BLACK, "b": Color8(46, 30, 40), "e": C_RED})
 
 
 func _draw_meadow() -> void:
 	# 極楽: 青空、流れる雲、遠くの丘、風に揺れる草原
 	var horizon := 214.0
-	# 朝の空: 上は青、地平線に近づくほど白い横線が増えていく（PICO-8 の網かけ風）
-	_px(Rect2(0, 0, W, horizon), P_BLUE)
-	var sy := horizon - 90.0
-	while sy < horizon:
-		var f := (sy - (horizon - 90.0)) / 90.0
-		var every := 4 if f < 0.35 else (2 if f < 0.7 else 1)
-		if int((sy - (horizon - 90.0)) / 2.0) % every == 0:
-			_px(Rect2(0, sy, W, 1), P_WHITE if f > 0.5 else P_LGREY)
-		sy += 2.0
+	for i in range(12):
+		draw_rect(Rect2(0, i * 18.0, W, 18), C_SKY_HI.lerp(C_SKY_LO, i / 11.0))
 	# 太陽
 	var sun := Vector2(540, 56)
-	draw_circle(sun, 26.0, Color(P_YELLOW, 0.3))
-	draw_circle(sun, 18.0, P_WHITE)
+	draw_circle(sun, 26.0, Color(C_YELLOW, 0.25))
+	draw_circle(sun, 18.0, Color8(255, 240, 160))
 	for k in range(8):
 		var a := TAU * k / 8.0 + t * 0.2
 		var p0 := sun + Vector2(cos(a), sin(a)) * 32.0
-		_px(Rect2(roundf(p0.x) - 1, roundf(p0.y) - 1, 3, 3), P_YELLOW)
+		draw_rect(Rect2(roundf(p0.x) - 1, roundf(p0.y) - 1, 3, 3), Color8(255, 236, 150))
 	# 流れる雲
 	for i in range(5):
 		var cx := fmod(i * 170.0 + t * (8.0 + i * 3.0), W + 120.0) - 60.0
@@ -1773,17 +1462,17 @@ func _draw_meadow() -> void:
 	for i in range(3):
 		var bx := fmod(t * 30.0 + i * 90.0, W + 60.0) - 30.0
 		var by := 90.0 + i * 14.0 + roundf(sin(t * 3.0 + i) * 3.0)
-		_spr(SPR_BIRD, Vector2(roundf(bx), by), {"b": P_DBLUE}, false, 2)
+		_spr(SPR_BIRD, Vector2(roundf(bx), by), {"b": Color8(60, 70, 100)}, false, 1)
 	# 遠くの丘
 	for x in range(0, int(W), 2):
 		var hh := 26.0 + sin(x * 0.012) * 14.0 + sin(x * 0.031 + 1.0) * 6.0
-		_px(Rect2(x, horizon - roundf(hh), 2, roundf(hh)), C_HILL)
+		draw_rect(Rect2(x, horizon - roundf(hh), 2, roundf(hh)), C_HILL)
 		var hh2 := 12.0 + sin(x * 0.02 + 2.0) * 8.0
-		_px(Rect2(x, horizon - roundf(hh2), 2, roundf(hh2)), C_HILL_D)
+		draw_rect(Rect2(x, horizon - roundf(hh2), 2, roundf(hh2)), C_HILL_D)
 	# 草原
-	_px(Rect2(0, horizon, W, H - horizon), C_GRASS)
+	draw_rect(Rect2(0, horizon, W, H - horizon), C_GRASS)
 	for i in range(5):
-		_px(Rect2(0, horizon + 10 + i * 28, W, 2), C_GRASS_D.lerp(C_GRASS, 0.5))
+		draw_rect(Rect2(0, horizon + 10 + i * 28, W, 2), C_GRASS_D.lerp(C_GRASS, 0.5))
 	# 風: 草がそよぐ
 	var wind := sin(t * 1.6) * 0.5 + 0.5
 	for i in range(220):
@@ -1792,26 +1481,26 @@ func _draw_meadow() -> void:
 		var ht := 4.0 + float(i % 4) * 2.0
 		var sway := roundf((sin(t * 3.0 + gx * 0.04) * 1.5 + wind * 2.0) * (ht / 8.0))
 		var gc := C_GRASS_L if i % 3 == 0 else C_GRASS_D
-		_px(Rect2(gx, gy - ht * 0.5, 1, ht * 0.5), gc)
-		_px(Rect2(gx + sway, gy - ht, 1, ht * 0.5), gc)
+		draw_rect(Rect2(gx, gy - ht * 0.5, 1, ht * 0.5), gc)
+		draw_rect(Rect2(gx + sway, gy - ht, 1, ht * 0.5), gc)
 	# 花
 	for i in range(40):
 		var fx := float((i * 97 + 13) % int(W))
 		var fy := horizon + 10.0 + float((i * 61) % int(H - horizon - 14.0))
-		var fc: Color = [P_WHITE, P_YELLOW, P_PINK][i % 3]
+		var fc: Color = [C_CLOUD, C_YELLOW, Color8(250, 150, 190)][i % 3]
 		var fs := roundf(sin(t * 3.0 + fx * 0.04) * 1.0)
-		_px(Rect2(fx + fs - 1, fy, 3, 1), fc)
-		_px(Rect2(fx + fs, fy - 1, 1, 3), fc)
+		draw_rect(Rect2(fx + fs - 1, fy, 3, 1), fc)
+		draw_rect(Rect2(fx + fs, fy - 1, 1, 3), fc)
 	# 風の筋と、舞う花びら
 	for i in range(6):
 		var wx := fmod(t * 140.0 + i * 120.0, W + 200.0) - 100.0
 		var wy := 120.0 + i * 34.0 + roundf(sin(t * 2.0 + i) * 4.0)
-		_px(Rect2(roundf(wx), wy, 24, 1), Color(C_CLOUD, 0.5))
-		_px(Rect2(roundf(wx) + 30, wy + 2, 10, 1), Color(C_CLOUD, 0.35))
+		draw_rect(Rect2(roundf(wx), wy, 24, 1), Color(C_CLOUD, 0.5))
+		draw_rect(Rect2(roundf(wx) + 30, wy + 2, 10, 1), Color(C_CLOUD, 0.35))
 	for i in range(14):
 		var px := fmod(t * (50.0 + i * 6.0) + i * 47.0, W + 40.0) - 20.0
 		var py := 150.0 + fmod(i * 23.0 + sin(t * 2.0 + i) * 10.0, 180.0)
-		_px(Rect2(roundf(px), roundf(py), 2, 1), P_PINK)
+		draw_rect(Rect2(roundf(px), roundf(py), 2, 1), Color8(250, 170, 200))
 
 	# 蓮池: 池の底から地獄へ糸が垂れている（原作どおり）
 	var pond := Vector2(300, 298)
@@ -1822,32 +1511,32 @@ func _draw_meadow() -> void:
 		if f <= 0.0:
 			continue
 		var hw := roundf((prx + 6.0) * sqrt(f))
-		_px(Rect2(pond.x - hw, pond.y + row, hw * 2, 1), P_DGREEN)   # 岸
+		draw_rect(Rect2(pond.x - hw, pond.y + row, hw * 2, 1), Color8(120, 150, 90))   # 岸
 	for row in range(int(-pry), int(pry)):
 		var hw := roundf(prx * sqrt(1.0 - pow(row / pry, 2.0)))
-		var wc := P_BLUE.lerp(P_DBLUE, (row + pry) / (pry * 2.0) * 0.5)
-		_px(Rect2(pond.x - hw, pond.y + row, hw * 2, 1), wc)
+		var wc := Color8(96, 176, 226).lerp(Color8(60, 130, 200), (row + pry) / (pry * 2.0))
+		draw_rect(Rect2(pond.x - hw, pond.y + row, hw * 2, 1), wc)
 	for i in range(16):   # さざ波
 		var rx := pond.x - prx * 0.8 + fmod(i * 41.0 + t * 10.0, prx * 1.6)
 		var ry := pond.y - pry * 0.7 + float((i * 23) % int(pry * 1.4))
 		if pow((rx - pond.x) / prx, 2.0) + pow((ry - pond.y) / pry, 2.0) < 0.8:
-			_px(Rect2(roundf(rx), roundf(ry), 4 + i % 3 * 2, 1), Color(C_CLOUD, 0.55))
+			draw_rect(Rect2(roundf(rx), roundf(ry), 4 + i % 3 * 2, 1), Color(C_CLOUD, 0.55))
 	# 蓮の葉と花（ゆらゆら）
 	var pads := [Vector2(-120, -6), Vector2(-60, 22), Vector2(70, -18), Vector2(110, 16), Vector2(-20, -28), Vector2(140, -4), Vector2(30, 30)]
 	for i in range(pads.size()):
 		var pp: Vector2 = pond + pads[i] + Vector2(0, roundf(sin(t * 1.5 + i) * 1.0))
-		_spr(SPR_LILY_PAD, pp, {"g": P_DGREEN, "G": P_GREEN})
+		_spr(SPR_LILY_PAD, pp, {"g": C_GRASS_D, "G": C_GRASS})
 	var flowers := [Vector2(-130, -14), Vector2(-62, 14), Vector2(72, -26), Vector2(118, 8), Vector2(150, -12), Vector2(-150, 10)]
 	for i in range(flowers.size()):
 		var fp: Vector2 = pond + flowers[i] + Vector2(0, roundf(sin(t * 1.2 + i * 2.0) * 1.0))
-		_spr(SPR_LOTUS_FLOWER, fp, {"p": P_LGREY, "P": P_WHITE, "y": P_YELLOW, "g": P_DGREEN})   # 玉のように白い蓮
+		_spr(SPR_LOTUS_FLOWER, fp, {"p": Color8(226, 110, 150), "P": Color8(250, 196, 214), "y": C_YELLOW, "g": C_GRASS_D})
 
 	# 真ん中の大きな蓮の葉と、蜘蛛。糸は葉の脇から池の中へ
 	var leaf := pond + Vector2(0, 4)
-	_spr(SPR_BIG_PAD, leaf, {"g": P_DGREEN, "G": P_GREEN}, false, 2)
+	_spr(SPR_LILY_PAD, leaf, {"g": C_GRASS_D, "G": C_GRASS}, false, 4)
 	var sp := leaf + Vector2(30, -8)
-	draw_line(sp + Vector2(-6, 4), leaf + Vector2(20, 10), Color(C_GOLD, 0.9), 2.0)
-	_spr(SPR_SPIDER, sp + Vector2(0, roundf(sin(t * 2.0))), {"l": P_BLACK, "b": P_DGREY, "e": P_RED})
+	draw_line(sp + Vector2(-6, 4), leaf + Vector2(20, 10), Color(C_GOLD, 0.9), 1.0)
+	_spr(SPR_SPIDER, sp + Vector2(0, roundf(sin(t * 2.0))), {"l": C_BLACK, "b": Color8(46, 30, 40), "e": C_RED})
 
 	# カンダタ: 水面からしぶきを上げて飛び出し、葉の上で両手を上げて喜ぶ
 	var k := clampf((phase_t - 0.35) / 0.5, 0.0, 1.0)
@@ -1855,13 +1544,13 @@ func _draw_meadow() -> void:
 		var sk := (phase_t - 0.35) / 1.25
 		for j in range(3):
 			var rr := roundf(8.0 + sk * 60.0 + j * 10.0)
-			draw_arc(leaf, rr, PI * 1.05, PI * 1.95, 24, Color(C_CLOUD, maxf(0.0, 0.8 - sk)), 2.0)
+			draw_arc(leaf, rr, PI * 1.05, PI * 1.95, 24, Color(C_CLOUD, maxf(0.0, 0.8 - sk)), 1.0)
 		for j in range(8):
 			var dx := (j - 3.5) * 6.0
 			var dy := -sin(sk * PI) * (30.0 + (j % 3) * 10.0)
-			_px(Rect2(leaf.x + roundf(dx * (1.0 + sk * 2.0)), leaf.y - 6 + roundf(dy), 2, 2), Color(C_CLOUD, maxf(0.0, 1.0 - sk)))
+			draw_rect(Rect2(leaf.x + roundf(dx * (1.0 + sk * 2.0)), leaf.y - 6 + roundf(dy), 2, 2), Color(C_CLOUD, maxf(0.0, 1.0 - sk)))
 	var ky := lerpf(leaf.y + 20.0, leaf.y - 24.0, 1.0 - (1.0 - k) * (1.0 - k)) - roundf(absf(sin(t * 5.0)) * 4.0) * k
-	_spr(SPR_KANDATA_JUMP, Vector2(leaf.x - 4, roundf(ky)), {"s": C_SKIN, "h": C_HAIR, "k": C_BLACK, "m": C_RED, "c": C_CLOTH}, false, 2)
+	_spr(SPR_KANDATA_JUMP, Vector2(leaf.x - 4, roundf(ky)), {"s": C_SKIN, "h": C_HAIR, "k": C_BLACK, "m": C_RED, "c": C_CLOTH}, false, 3)
 
 	# お釈迦様: 池のほとり、蓮の台座に座って静かに見守る
 	var bud := Vector2(552, 244)
@@ -1869,15 +1558,15 @@ func _draw_meadow() -> void:
 	var halo := bud + Vector2(0, -30)
 	draw_circle(halo, 44.0, Color(C_YELLOW, 0.10 + 0.06 * glow))
 	draw_circle(halo, 32.0, Color(C_YELLOW, 0.18))
-	draw_arc(halo, 34.0, 0, TAU, 40, Color(C_GOLD, 0.85), 2.0)
+	draw_arc(halo, 34.0, 0, TAU, 40, Color(C_GOLD, 0.85), 1.0)
 	for k2 in range(12):   # 後光
 		var a2 := TAU * k2 / 12.0
 		var p2 := halo + Vector2(cos(a2), sin(a2)) * (38.0 + 2.0 * glow)
-		_px(Rect2(roundf(p2.x) - 1, roundf(p2.y) - 1, 2, 2), Color(C_YELLOW, 0.7))
-	_spr(SPR_BUDDHA, bud, {"h": P_DBLUE, "s": P_YELLOW, "k": P_BROWN,
-			"m": P_ORANGE, "w": P_WHITE, "r": P_ORANGE, "R": P_BROWN}, false, 3)
+		draw_rect(Rect2(roundf(p2.x) - 1, roundf(p2.y) - 1, 2, 2), Color(C_YELLOW, 0.7))
+	_spr(SPR_BUDDHA, bud, {"h": Color8(52, 62, 116), "s": Color8(242, 206, 132), "k": Color8(110, 70, 40),
+			"m": Color8(200, 110, 90), "w": Color8(255, 250, 230), "r": Color8(222, 120, 46), "R": Color8(172, 84, 30)}, false, 3)
 	_draw_particles()
-	_spr(SPR_PEDESTAL, bud + Vector2(0, 38), {"p": P_PINK, "P": P_PEACH, "g": P_DGREEN}, false, 2)
+	_spr(SPR_PEDESTAL, bud + Vector2(0, 38), {"p": Color8(226, 110, 150), "P": Color8(250, 196, 214), "g": C_GRASS_D}, false, 3)
 
 
 func _draw_ring(c: Vector2, snap: float) -> void:
@@ -1889,54 +1578,52 @@ func _draw_ring(c: Vector2, snap: float) -> void:
 	if snap < 1.3:
 		col = C_RED
 	draw_circle(c, 9.0, C_BLACK)
-	draw_arc(c, 6.0, 0, TAU, 24, Color(C_WHITE, 0.2), 2.0)
+	draw_arc(c, 6.0, 0, TAU, 24, Color(C_WHITE, 0.2), 3.0)
 	if r > 0.0:
-		draw_arc(c, 6.0, -PI * 0.5, -PI * 0.5 + TAU * r, 24, col, 2.0)
+		draw_arc(c, 6.0, -PI * 0.5, -PI * 0.5 + TAU * r, 24, col, 3.0)
 	if ring_nope > 0.0:   # 踏み台がいないのに叫んだ: ○が左右に震える
 		c.x += roundf(sin(ring_nope * 60.0) * 2.0)
 	if snap < 1.5:   # 切れそう: 赤く脈打つ
 		col = C_RED if fmod(t, 0.3) < 0.18 else C_YELLOW
-		draw_arc(c, 11.0 + roundf(absf(sin(t * 12.0)) * 2.0), 0, TAU, 24, col, 2.0)
+		draw_arc(c, 11.0 + roundf(absf(sin(t * 12.0)) * 2.0), 0, TAU, 24, col, 1.0)
 		if model.can_shout():
 			_label(Vector2(c.x + 14, c.y + 6), "叫べ！", 16, col)
 
 
 func _ghost_pal(i: int) -> Dictionary:
 	# カンダタと同じ肌・黒い目・赤い口。肌の濃淡、髪、腰布の色だけ一人ずつ変える
-	var skin := C_SKIN
-	var cloths := [P_DGREY, P_BROWN, P_LAV, P_DPURP]
+	var skin := C_SKIN.lerp(Color8(196, 140, 100), float((i * 7) % 5) / 4.0)
+	var cloths := [Color8(110, 96, 80), Color8(96, 70, 56), Color8(120, 110, 96), Color8(84, 76, 70)]
 	return {"s": skin, "h": GHOST_HAIR[i % GHOST_HAIR.size()], "k": C_BLACK, "m": C_RED,
 			"c": cloths[(i * 3) % cloths.size()]}
 
 
 func _draw_kandata(p: Vector2) -> void:
-	# 髪で状態を見せる（セレステのマデリンの髪のように）: 叫べる＝赤、踏み台なし＝茶、九死に一生の圏内＝金に明滅
-	var hair: Color = P_RED if model.can_shout() else P_BROWN
+	var pal := {"s": C_SKIN, "h": C_HAIR, "k": C_BLACK, "m": C_RED, "c": C_CLOTH}
 	if model.is_clutch() and model.can_shout() and fmod(t, 0.16) < 0.08:
-		hair = P_YELLOW
-	var pal := {"s": C_SKIN, "h": hair, "k": C_BLACK, "m": C_RED, "c": C_CLOTH}
+		pal["s"] = C_GOLD   # 九死に一生の圏内は金色に明滅
 	if model.stun_left > 0.0:
-		pal["s"] = P_PINK
+		pal["s"] = Color8(250, 140, 120)
 	var lean := clampf(model.vx * 0.01, -4.0, 4.0)
 	if model.state == ThreadModel.State.AIR:
-		_spr(SPR_KANDATA_JUMP, Vector2(p.x + roundf(lean), p.y), pal, false, SC)
+		_spr(SPR_KANDATA_JUMP, Vector2(p.x + roundf(lean), p.y), pal)
 		return
 	if model.state == ThreadModel.State.CLIMBING and climb_moving > 0.0:
 		# 手を交互に伸ばす4コマ: 左手上 → 両手 → 右手上 → 両手。伸ばした瞬間に体が持ち上がる
 		var fr := int(floorf(climb_phase)) % 4
 		var bob := 0.0
 		if fr % 2 == 0:
-			_spr(SPR_KANDATA_REACH, Vector2(p.x + roundf(lean), p.y + bob), pal, fr == 2, SC)
+			_spr(SPR_KANDATA_REACH, Vector2(p.x + roundf(lean), p.y + bob), pal, fr == 2)
 		else:
-			_spr(SPR_KANDATA, Vector2(p.x + roundf(lean), p.y + bob), pal, false, SC)
+			_spr(SPR_KANDATA, Vector2(p.x + roundf(lean), p.y + bob), pal)
 		return
-	_spr(SPR_KANDATA, Vector2(p.x + roundf(lean), p.y), pal, false, SC)
+	_spr(SPR_KANDATA, Vector2(p.x + roundf(lean), p.y), pal)
 
 
 func _draw_map() -> void:
 	# 右端の縦バー: 下が地獄、上の蓮が極楽。金=今の高さ、赤=マグマ、水色=叫べば届く高さ、白線=自己ベスト
-	_px(Rect2(FIELD_W, 0, W - FIELD_W, H), P_BLACK)
-	_px(Rect2(FIELD_W, 0, 1, H), C_DARK)
+	draw_rect(Rect2(FIELD_W, 0, W - FIELD_W, H), Color8(14, 8, 12))
+	draw_rect(Rect2(FIELD_W, 0, 1, H), C_DARK)
 	var bx := MAP_X - 1.0
 	var bw := 8.0
 	var cx := bx + bw * 0.5
@@ -1945,41 +1632,42 @@ func _draw_map() -> void:
 	draw_circle(Vector2(cx, MAP_TOP - 12.0), 9.0, Color(C_YELLOW, glow * 0.5))
 	_spr(SPR_LOTUS, Vector2(cx, MAP_TOP - 12), {"y": C_YELLOW}, false, 2)
 	# 枠と中身
-	_px(Rect2(bx - 1.0, MAP_TOP - 1.0, bw + 2.0, MAP_BOT - MAP_TOP + 2.0), C_DARK)
-	_px(Rect2(bx, MAP_TOP, bw, MAP_BOT - MAP_TOP), P_DBLUE)
+	draw_rect(Rect2(bx - 1.0, MAP_TOP - 1.0, bw + 2.0, MAP_BOT - MAP_TOP + 2.0), C_DARK)
+	draw_rect(Rect2(bx, MAP_TOP, bw, MAP_BOT - MAP_TOP), Color8(30, 14, 20))
 	# 目盛り: 100m ごと、500m は長く
 	for m in range(100, int(ThreadModel.GOAL), 100):
 		var ty := _h_to_map(float(m))
 		var long := m % 500 == 0
-		_px(Rect2(bx - (4.0 if long else 2.0), ty, 4.0 if long else 2.0, 1), Color(C_WHITE, 0.45 if long else 0.25))
+		draw_rect(Rect2(bx - (4.0 if long else 2.0), ty, 4.0 if long else 2.0, 1), Color(C_WHITE, 0.45 if long else 0.25))
 	# 進んだ分（下から金色、上ほど明るく）
 	var cur := _h_to_map(model.height)
 	var yy := MAP_BOT - 2.0
 	while yy >= cur:
 		var k := (MAP_BOT - yy) / (MAP_BOT - MAP_TOP)
-		_px(Rect2(bx + 1.0, yy, bw - 2.0, 2), C_ORANGE.lerp(C_GOLD, k))
+		draw_rect(Rect2(bx + 1.0, yy, bw - 2.0, 2), C_ORANGE.lerp(C_GOLD, k))
 		yy -= 2.0
 	# 自己ベストの高さ
 	if best[difficulty] > 0 and best[difficulty] < int(ThreadModel.GOAL):
 		var by := _h_to_map(float(best[difficulty]))
-		_px(Rect2(bx - 2.0, by, bw + 4.0, 1), Color(C_WHITE, 0.7))
+		draw_rect(Rect2(bx - 2.0, by, bw + 4.0, 1), Color(C_WHITE, 0.7))
 	# 叫べば届く高さ
 	if model.can_shout():
 		var jy := _h_to_map(model.height + model.jump_height())
-		_px(Rect2(bx + 1.0, jy, bw - 2.0, cur - jy), Color(C_CYAN, 0.35 + 0.15 * sin(t * 8.0)))
-		_px(Rect2(bx - 2.0, jy, bw + 4.0, 1), C_CYAN)
+		draw_rect(Rect2(bx + 1.0, jy, bw - 2.0, cur - jy), Color(C_CYAN, 0.35 + 0.15 * sin(t * 8.0)))
+		draw_rect(Rect2(bx - 2.0, jy, bw + 4.0, 1), C_CYAN)
 	# マグマ: 波打つ上端
 	if model.lava_h > 0.0:
 		var lv := _h_to_map(model.lava_h)
-		_px(Rect2(bx + 1.0, lv, bw - 2.0, MAP_BOT - lv), C_RED)
+		draw_rect(Rect2(bx + 1.0, lv, bw - 2.0, MAP_BOT - lv), C_RED)
 		for i in range(int(bw) - 2):
 			var wy := lv + roundf(sin(t * 6.0 + i * 1.3))
-			_px(Rect2(bx + 1.0 + i, wy - 1.0, 1, 2), C_YELLOW if (i + int(t * 10.0)) % 3 == 0 else C_ORANGE)
+			draw_rect(Rect2(bx + 1.0 + i, wy - 1.0, 1, 2), C_YELLOW if (i + int(t * 10.0)) % 3 == 0 else C_ORANGE)
 		if model.height - model.lava_h < 15.0 and fmod(t, 0.3) < 0.15:   # 迫ると枠が赤く点滅
-			_px(Rect2(bx - 1.0, MAP_TOP - 1.0, 1, MAP_BOT - MAP_TOP + 2.0), C_RED)
-			_px(Rect2(bx + bw, MAP_TOP - 1.0, 1, MAP_BOT - MAP_TOP + 2.0), C_RED)
+			draw_rect(Rect2(bx - 1.0, MAP_TOP - 1.0, 1, MAP_BOT - MAP_TOP + 2.0), C_RED)
+			draw_rect(Rect2(bx + bw, MAP_TOP - 1.0, 1, MAP_BOT - MAP_TOP + 2.0), C_RED)
 	# カンダタの顔
 	_spr(SPR_HEAD, Vector2(cx, cur), {"h": C_HAIR, "s": C_SKIN, "k": C_BLACK}, false, 2)
+	_spr(SPR_FIRE[int(t * 6.0) % 2], Vector2(cx, MAP_BOT + 14), {"y": C_YELLOW, "o": C_ORANGE, "w": C_RED}, false, 1)
 
 
 func _draw_hud() -> void:
@@ -1995,42 +1683,15 @@ func _shadow_label(p: Vector2, txt: String, col: Color, align := HORIZONTAL_ALIG
 
 
 func _draw_title() -> void:
-	# PICO-8 っぽく: 黒地に、登場するものを色とりどりに並べる
-	_px(Rect2(0, 0, W, H), P_BLACK)
+	# ファミコン風: タイトル、難易度、スタートだけ。遊び方はプレイ中の案内で
+	draw_rect(Rect2(0, 0, W, H), Color(C_BLACK, 0.85))
 	var cx := W * 0.5
-	# またたく星（火の粉）
-	for i in range(40):
-		var sx := float((i * 97 + 31) % int(W))
-		var sy := float((i * 53 + 17) % int(H))
-		var tw := fmod(t * 1.5 + i * 0.37, 1.0)
-		if tw < 0.5:
-			var sc2: Color = [P_RED, P_ORANGE, P_YELLOW, P_PINK, P_WHITE][i % 5]
-			_px(Rect2(sx, sy, 2, 2), sc2)
-			if tw < 0.15:   # きらっ
-				_px(Rect2(sx - 2, sy, 6, 2), sc2)
-				_px(Rect2(sx, sy - 2, 2, 6), sc2)
-	draw_line(Vector2(cx, 0), Vector2(cx, 150), P_WHITE, 2.0)   # 糸（文字の後ろ）
-	_px(Rect2(cx - 150, 64, 300, 60), P_BLACK)
-	_label(Vector2(cx, 92), "パワーカンダタ（仮）", 32, P_YELLOW, HORIZONTAL_ALIGNMENT_CENTER)
-	_label(Vector2(cx, 116), "蜘蛛の糸から、極楽へ", 16, P_PINK, HORIZONTAL_ALIGNMENT_CENTER)
-	# 蜘蛛と、ぶら下がるカンダタ
-	_spr(SPR_SPIDER, Vector2(cx, 132 + roundf(sin(t * 2.0) * 2.0)), {"l": P_WHITE, "b": P_DGREY, "e": P_RED}, false, 2)
-	var bob := roundf(sin(t * 3.0) * 2.0)
-	_spr(SPR_KANDATA, Vector2(cx, 176 + bob), {"s": C_SKIN, "h": C_HAIR, "k": C_BLACK, "m": C_RED, "c": C_CLOTH}, false, 2)
-	# 登場するものたち
-	var hop := func(i: int) -> float: return -roundf(absf(sin(t * 4.0 + i)) * 4.0)
-	_spr(SPR_ONI_UP, Vector2(cx - 210, 190 + hop.call(0)), ONI_PAL, false, 2)
-	_spr(SPR_ROCK[int(t * 4.0) % 2], Vector2(cx - 210, 150 + hop.call(0)), ROCK_PAL, false, 2)
-	_spr(SPR_FIRE[int(t * 8.0) % 2], Vector2(cx - 130, 196 + hop.call(1)), {"y": P_YELLOW, "o": P_ORANGE, "w": P_WHITE}, false, 2)
-	_spr(SPR_GHOST, Vector2(cx + 120, 192 + hop.call(2)), _ghost_pal(1), true, 2)
-	_spr(SPR_GHOST_RUN, Vector2(cx + 165, 192 + hop.call(3)), _ghost_pal(2), true, 2)
-	_spr(SPR_LOTUS_FLOWER, Vector2(cx + 225, 196 + hop.call(4)), {"p": P_LGREY, "P": P_WHITE, "y": P_YELLOW, "g": P_DGREEN}, false, 2)
-	var dcol: Color = [P_GREEN, P_YELLOW, P_RED][difficulty]
-	_label(Vector2(cx, 256), "＜ %s ＞" % ThreadModel.DIFFICULTY_NAMES[difficulty], 16, dcol, HORIZONTAL_ALIGNMENT_CENTER)
-	if best_time[difficulty] > 0.0:
-		_label(Vector2(cx, 278), "BEST %.1f" % best_time[difficulty], 16, P_LAV, HORIZONTAL_ALIGNMENT_CENTER)
+	_label(Vector2(cx, 120), "パワーカンダタ（仮）", 32, C_GOLD, HORIZONTAL_ALIGNMENT_CENTER)
+	_spr(SPR_KANDATA, Vector2(cx, 172), {"s": C_SKIN, "h": C_HAIR, "k": C_BLACK, "m": C_RED, "c": C_CLOTH}, false, 3)
+	var dcol: Color = [C_GREEN, C_YELLOW, C_RED][difficulty]
+	_label(Vector2(cx, 240), "＜ %s ＞" % ThreadModel.DIFFICULTY_NAMES[difficulty], 16, dcol, HORIZONTAL_ALIGNMENT_CENTER)
 	if fmod(t, 1.0) < 0.6:
-		_label(Vector2(cx, 316), "PUSH START", 16, P_WHITE, HORIZONTAL_ALIGNMENT_CENTER)
+		_label(Vector2(cx, 286), "PUSH START", 16, C_WHITE, HORIZONTAL_ALIGNMENT_CENTER)
 
 
 func _rank(sec: float) -> String:
@@ -2048,7 +1709,7 @@ func _draw_result() -> void:
 		# 景色を隠さないよう、上に小さく
 		var a := clampf((phase_t - 1.8) / 0.5, 0.0, 1.0)
 		var wx := W * 0.5
-		_px(Rect2(wx - 160, 24, 320, 196), Color(C_BLACK, 0.5 * a))
+		draw_rect(Rect2(wx - 160, 24, 320, 196), Color(C_BLACK, 0.5 * a))
 		_label(Vector2(wx, 58), "極楽に到達！", 32, Color(C_YELLOW, a), HORIZONTAL_ALIGNMENT_CENTER)
 		_label(Vector2(wx, 82), "TIME %.1f   RANK %s" % [model.elapsed, _rank(model.elapsed)], 16, Color(C_WHITE, a), HORIZONTAL_ALIGNMENT_CENTER)
 		# 上位10件（左に1〜5位、右に6〜10位）。今回のタイムは点滅
@@ -2068,7 +1729,7 @@ func _draw_result() -> void:
 		if fmod(t, 1.0) < 0.6 and a >= 1.0:
 			_label(Vector2(wx, 346), "PUSH START", 16, C_WHITE, HORIZONTAL_ALIGNMENT_CENTER)
 		return
-	_px(Rect2(0, 0, FIELD_W, H), Color(C_BLACK, 0.8))
+	draw_rect(Rect2(0, 0, FIELD_W, H), Color(C_BLACK, 0.8))
 	var cx := FIELD_W * 0.5
 	_label(Vector2(cx, 120), "GAME OVER", 32, C_RED, HORIZONTAL_ALIGNMENT_CENTER)
 	_label(Vector2(cx, 172), "%d/%dm" % [int(model.height), int(ThreadModel.GOAL)], 32, C_GOLD, HORIZONTAL_ALIGNMENT_CENTER)
@@ -2082,11 +1743,11 @@ func _draw_result() -> void:
 
 
 func _draw_panel() -> void:
-	_px(Rect2(0, 0, W, H), Color(C_BLACK, 0.8))
+	draw_rect(Rect2(0, 0, W, H), Color(C_BLACK, 0.8))
 	var px := 40.0
 	var py := 34.0
-	_px(Rect2(px - 16, py - 26, 592, 336), P_BLACK)
-	draw_rect(Rect2(px - 16, py - 26, 592, 336), C_GOLD, false, 2.0)
+	draw_rect(Rect2(px - 16, py - 26, 592, 336), Color8(24, 14, 26))
+	draw_rect(Rect2(px - 16, py - 26, 592, 336), C_GOLD, false, 1.0)
 	_label(Vector2(px, py), "調整パネル（一時停止中）", 16, C_GOLD)
 	var keys: Array = ThreadModel.TUNE_ORDER
 	for i in range(keys.size()):
@@ -2094,7 +1755,7 @@ func _draw_panel() -> void:
 		var y := py + 24.0 + i * 18.0
 		var sel := i == panel_sel
 		if sel:
-			_px(Rect2(px - 8, y - 14, 576, 18), Color(C_GOLD, 0.2))
+			draw_rect(Rect2(px - 8, y - 14, 576, 18), Color(C_GOLD, 0.2))
 		var changed: bool = not is_equal_approx(tuning[k], ThreadModel.DEFAULTS[k])
 		_label(Vector2(px, y), ("＞" if sel else "　") + ThreadModel.TUNE_LABEL[k], 16, C_WHITE if sel else Color(C_WHITE, 0.75))
 		var val := _fmt(tuning[k])
@@ -2116,8 +1777,7 @@ func _fmt(v: float) -> String:
 
 
 func _label(pos: Vector2, text: String, size: int, col: Color, align := HORIZONTAL_ALIGNMENT_LEFT) -> void:
-	# 文字は格子にそろえると読めなくなるので、いちばん上の層（16色フィルタの上）にくっきり描く。
-	# ここでは描く内容を貯めておき、_draw_text_layer でまとめて描く
+	# 右寄せ・中央寄せは pos.x を基準に。32 は 16 のドット文字を 2 倍に拡大して描く
 	var sc := 2.0 if size >= 32 else 1.0
 	var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x * sc
 	var p := pos.round()
@@ -2125,28 +1785,17 @@ func _label(pos: Vector2, text: String, size: int, col: Color, align := HORIZONT
 		p.x -= tw
 	elif align == HORIZONTAL_ALIGNMENT_CENTER:
 		p.x -= roundf(tw * 0.5)
-	text_queue.append([p, text, sc, col, draw_off])
-
-
-func _draw_text_layer() -> void:
-	for q in text_queue:
-		var p: Vector2 = q[0]
-		var text: String = q[1]
-		var sc: float = q[2]
-		var col: Color = q[3]
-		var off: Vector2 = q[4]
-		if sc > 1.0:
-			text_layer.draw_set_transform(off, 0.0, Vector2(sc, sc))
-			var lp := (p / sc).round()
-			text_layer.draw_string(font, lp + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(C_BLACK, col.a))
-			text_layer.draw_string(font, lp, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
-		else:
-			text_layer.draw_set_transform(off)
-			text_layer.draw_string(font, p + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(C_BLACK, col.a))
-			text_layer.draw_string(font, p, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
-	text_layer.draw_set_transform(Vector2.ZERO)
+	if sc > 1.0:
+		draw_set_transform(draw_off, 0.0, Vector2(sc, sc))
+		var lp := (p / sc).round()
+		draw_string(font, lp + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(C_BLACK, col.a))
+		draw_string(font, lp, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
+		draw_set_transform(draw_off)
+	else:
+		draw_string(font, p + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(C_BLACK, col.a))
+		draw_string(font, p, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
 
 
 func _pbar(r: Rect2, ratio: float, col: Color) -> void:
-	_px(r, C_DARK)
-	_px(Rect2(r.position, Vector2(roundf(r.size.x * clampf(ratio, 0.0, 1.0)), r.size.y)), col)
+	draw_rect(r, C_DARK)
+	draw_rect(Rect2(r.position, Vector2(roundf(r.size.x * clampf(ratio, 0.0, 1.0)), r.size.y)), col)
