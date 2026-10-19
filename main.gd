@@ -302,6 +302,10 @@ const DIFF_PATH := "user://difficulty.txt"
 const BEST_PATH := "user://records_v3.txt"   # 難易度ごとの最高到達（m）と、最速クリア（秒）
 var best := [0, 0, 0]              # 最高到達 m
 var best_time := [0.0, 0.0, 0.0]   # 最速クリア 秒（0 = まだクリアしていない）
+const RANKING_PATH := "user://ranking_v1.json"   # 難易度ごとのクリアタイム上位10件
+const RANKING_SIZE := 10
+var ranking := [[], [], []]        # [{"t": 秒, "d": "MM/DD"}, ...] 速い順
+var new_rank := -1                 # 今回のタイムが入った順位（0始まり、入らなければ -1）
 var new_record := false
 var phase := Phase.TITLE
 var t := 0.0
@@ -370,6 +374,7 @@ func _ready() -> void:
 				best[k] = int(parts2[k])
 			else:
 				best_time[k - 3] = float(parts2[k])
+	_load_ranking()
 	course = randi_range(1, 999)
 	_new_model()
 
@@ -610,7 +615,9 @@ func _process(delta: float) -> void:
 			_burst(Vector2(_sx(model.x), _sy(model.lava_h)), 18, [C_YELLOW, C_ORANGE, C_RED], 70.0, 2.0, 0.6, -60.0)
 		prev_state = model.state
 		if model.state == ThreadModel.State.WON or model.state == ThreadModel.State.TORN:
+			new_rank = -1
 			if model.state == ThreadModel.State.WON:
+				_add_ranking(model.elapsed)
 				new_record = best_time[difficulty] <= 0.0 or model.elapsed < best_time[difficulty]
 				if new_record:
 					best_time[difficulty] = model.elapsed
@@ -663,6 +670,43 @@ func _process(delta: float) -> void:
 		p[3] += delta
 	popups = popups.filter(func(p): return p[3] < 1.2)
 	queue_redraw()
+
+
+func _load_ranking() -> void:
+	if not FileAccess.file_exists(RANKING_PATH):
+		return
+	var data = JSON.parse_string(FileAccess.get_file_as_string(RANKING_PATH))
+	if typeof(data) != TYPE_ARRAY:
+		return
+	for k in range(mini(data.size(), 3)):
+		if typeof(data[k]) == TYPE_ARRAY:
+			var lst: Array = []
+			for e in data[k]:
+				if typeof(e) == TYPE_DICTIONARY and e.has("t"):
+					lst.append({"t": float(e["t"]), "d": str(e.get("d", ""))})
+			ranking[k] = lst
+
+
+func _add_ranking(sec: float) -> void:
+	# クリアタイムを上位10件に入れる。速い順。同タイムは先に出した方が上
+	var dd := Time.get_date_dict_from_system()
+	var entry := {"t": snappedf(sec, 0.01), "d": "%02d/%02d" % [dd.month, dd.day]}
+	var lst: Array = ranking[difficulty]
+	var pos := lst.size()
+	for i in range(lst.size()):
+		if sec < float(lst[i]["t"]):
+			pos = i
+			break
+	if pos >= RANKING_SIZE:
+		return
+	lst.insert(pos, entry)
+	while lst.size() > RANKING_SIZE:
+		lst.pop_back()
+	ranking[difficulty] = lst
+	new_rank = pos
+	var f := FileAccess.open(RANKING_PATH, FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify(ranking))
 
 
 func _save_records() -> void:
@@ -1619,14 +1663,23 @@ func _draw_result() -> void:
 		# 景色を隠さないよう、上に小さく
 		var a := clampf((phase_t - 1.8) / 0.5, 0.0, 1.0)
 		var wx := W * 0.5
-		draw_rect(Rect2(wx - 150, 70, 300, 92), Color(C_BLACK, 0.45 * a))
-		_label(Vector2(wx, 102), "極楽に到達！", 32, Color(C_YELLOW, a), HORIZONTAL_ALIGNMENT_CENTER)
-		_label(Vector2(wx, 126), "TIME %.1f   RANK %s" % [model.elapsed, _rank(model.elapsed)], 16, Color(C_WHITE, a), HORIZONTAL_ALIGNMENT_CENTER)
-		if new_record:
-			if fmod(t, 0.4) < 0.28:
-				_label(Vector2(wx, 148), "NEW RECORD!", 16, Color(C_YELLOW, a), HORIZONTAL_ALIGNMENT_CENTER)
-		else:
-			_label(Vector2(wx, 148), "BEST %.1f" % best_time[difficulty], 16, Color(C_WHITE, 0.7 * a), HORIZONTAL_ALIGNMENT_CENTER)
+		draw_rect(Rect2(wx - 160, 24, 320, 196), Color(C_BLACK, 0.5 * a))
+		_label(Vector2(wx, 58), "極楽に到達！", 32, Color(C_YELLOW, a), HORIZONTAL_ALIGNMENT_CENTER)
+		_label(Vector2(wx, 82), "TIME %.1f   RANK %s" % [model.elapsed, _rank(model.elapsed)], 16, Color(C_WHITE, a), HORIZONTAL_ALIGNMENT_CENTER)
+		# 上位10件（左に1〜5位、右に6〜10位）。今回のタイムは点滅
+		_label(Vector2(wx, 106), "― %s ランキング ―" % ThreadModel.DIFFICULTY_NAMES[difficulty], 16, Color(C_GOLD, a), HORIZONTAL_ALIGNMENT_CENTER)
+		var lst: Array = ranking[difficulty]
+		for i in range(RANKING_SIZE):
+			var col_x := wx - 148.0 if i < 5 else wx + 8.0
+			var row_y := 130.0 + float(i % 5) * 18.0
+			var txt := "%2d  ----.-" % (i + 1)
+			var c := Color(C_WHITE, 0.45 * a)
+			if i < lst.size():
+				txt = "%2d  %6.1f  %s" % [i + 1, float(lst[i]["t"]), lst[i]["d"]]
+				c = Color(C_WHITE, 0.9 * a)
+			if i == new_rank:
+				c = Color(C_YELLOW, a) if fmod(t, 0.4) < 0.28 else Color(C_ORANGE, a)
+			_label(Vector2(col_x, row_y), txt, 16, c)
 		if fmod(t, 1.0) < 0.6 and a >= 1.0:
 			_label(Vector2(wx, 346), "PUSH START", 16, C_WHITE, HORIZONTAL_ALIGNMENT_CENTER)
 		return
