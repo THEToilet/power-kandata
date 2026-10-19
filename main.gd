@@ -299,8 +299,9 @@ var tuning: Dictionary = ThreadModel.DEFAULTS.duplicate()
 var course := 1
 var difficulty := 1              # 0 やさしい / 1 ふつう / 2 むずかしい
 const DIFF_PATH := "user://difficulty.txt"
-const BEST_PATH := "user://best_endless.txt"   # 難易度ごとの最高到達（m）
-var best := [0, 0, 0]
+const BEST_PATH := "user://records_v3.txt"   # 難易度ごとの最高到達（m）と、最速クリア（秒）
+var best := [0, 0, 0]              # 最高到達 m
+var best_time := [0.0, 0.0, 0.0]   # 最速クリア 秒（0 = まだクリアしていない）
 var new_record := false
 var phase := Phase.TITLE
 var t := 0.0
@@ -364,8 +365,11 @@ func _ready() -> void:
 		difficulty = clampi(int(FileAccess.get_file_as_string(DIFF_PATH)), 0, 2)
 	if FileAccess.file_exists(BEST_PATH):
 		var parts2 := FileAccess.get_file_as_string(BEST_PATH).split(",")
-		for k in range(mini(parts2.size(), 3)):
-			best[k] = int(parts2[k])
+		for k in range(mini(parts2.size(), 6)):
+			if k < 3:
+				best[k] = int(parts2[k])
+			else:
+				best_time[k - 3] = float(parts2[k])
 	course = randi_range(1, 999)
 	_new_model()
 
@@ -606,13 +610,17 @@ func _process(delta: float) -> void:
 			_burst(Vector2(_sx(model.x), _sy(model.lava_h)), 18, [C_YELLOW, C_ORANGE, C_RED], 70.0, 2.0, 0.6, -60.0)
 		prev_state = model.state
 		if model.state == ThreadModel.State.WON or model.state == ThreadModel.State.TORN:
+			if model.state == ThreadModel.State.WON:
+				new_record = best_time[difficulty] <= 0.0 or model.elapsed < best_time[difficulty]
+				if new_record:
+					best_time[difficulty] = model.elapsed
+				best[difficulty] = int(ThreadModel.GOAL)
+				_save_records()
 			if model.state == ThreadModel.State.TORN:
 				new_record = int(model.height) > best[difficulty]
 				if new_record:
 					best[difficulty] = int(model.height)
-					var bf := FileAccess.open(BEST_PATH, FileAccess.WRITE)
-					if bf:
-						bf.store_string("%d,%d,%d" % [best[0], best[1], best[2]])
+					_save_records()
 				_burst(Vector2(_sx(model.x), _player_sy()), 60, [C_RED, C_BLOOD, C_ORANGE], 140.0, 2.0, 1.0, 120.0)
 				shake = 1.0
 				falling_thread.append([h_before, model.x, 0.0])
@@ -634,7 +642,7 @@ func _process(delta: float) -> void:
 	var dh := model.height - anim_h
 	anim_h = model.height
 	if model.state == ThreadModel.State.CLIMBING and dh > 0.0 and dh < 2.0:
-		climb_phase += dh * 0.75
+		climb_phase += dh * 0.4
 		climb_moving = 0.15
 	else:
 		climb_moving = maxf(0.0, climb_moving - delta)
@@ -655,6 +663,12 @@ func _process(delta: float) -> void:
 		p[3] += delta
 	popups = popups.filter(func(p): return p[3] < 1.2)
 	queue_redraw()
+
+
+func _save_records() -> void:
+	var bf := FileAccess.open(BEST_PATH, FileAccess.WRITE)
+	if bf:
+		bf.store_string("%d,%d,%d,%.2f,%.2f,%.2f" % [best[0], best[1], best[2], best_time[0], best_time[1], best_time[2]])
 
 
 func _on_shout(n_ghosts: int, from_x: float) -> void:
@@ -922,7 +936,7 @@ func _spr(rows: Array, pos: Vector2, pal: Dictionary, flip := false, sc := 2) ->
 
 func _draw_world() -> void:
 	# 背景: 高いほど地獄の赤 → 闇 → 極楽の金（帯で段階的に）
-	var r := clampf(cam_h / 2000.0, 0.0, 1.0)
+	var r := clampf(cam_h / ThreadModel.GOAL, 0.0, 1.0)
 	var top := C_DARK.lerp(Color8(96, 76, 40), r)
 	var bot := C_BLOOD.lerp(C_DARK, r)
 	for i in range(9):
@@ -1538,39 +1552,38 @@ func _draw_kandata(p: Vector2) -> void:
 	if model.state == ThreadModel.State.CLIMBING and climb_moving > 0.0:
 		# 手を交互に伸ばす4コマ: 左手上 → 両手 → 右手上 → 両手。伸ばした瞬間に体が持ち上がる
 		var fr := int(floorf(climb_phase)) % 4
-		var bob := -2.0 if fr % 2 == 0 else 0.0
+		var bob := 0.0
 		if fr % 2 == 0:
 			_spr(SPR_KANDATA_REACH, Vector2(p.x + roundf(lean), p.y + bob), pal, fr == 2)
 		else:
 			_spr(SPR_KANDATA, Vector2(p.x + roundf(lean), p.y + bob), pal)
-		if fr != last_climb_frame:
-			last_climb_frame = fr
-			if fr % 2 == 0:   # 糸をつかみ直した手元から、繊維がこぼれる
-				var hx := p.x + roundf(lean) + (-1.0 if fr == 0 else 1.0)
-				_part(Vector2(hx, p.y - 16.0), Vector2(randf_range(-20, 20), randf_range(10, 30)), 0.3, Color(C_WHITE, 0.6), 1.0, 60.0)
 		return
-	# 止まっているとき: ゆっくり息をする（2px 上下）
-	var breathe := -2.0 if fmod(t, 1.2) < 0.6 else 0.0
-	_spr(SPR_KANDATA, Vector2(p.x + roundf(lean), p.y + breathe), pal)
+	_spr(SPR_KANDATA, Vector2(p.x + roundf(lean), p.y), pal)
 
 
 func _draw_map() -> void:
-	# 右端の細いバー: 業火がどれだけ迫っているか（赤が上まで来たら焼かれる）
+	# 右端の縦バー: 下が地獄、上の蓮が極楽。金が今の高さ、赤が迫るマグマ
 	draw_rect(Rect2(FIELD_W, 0, W - FIELD_W, H), C_BLACK)
-	var gap: float = model.height - model.lava_h
-	var k := clampf(1.0 - gap / model.cfg.lava_leash, 0.0, 1.0)
+	_spr(SPR_LOTUS, Vector2(MAP_X + 3, MAP_TOP - 10), {"y": C_YELLOW}, false, 2)
+	var cur := _h_to_map(model.height)
 	draw_rect(Rect2(MAP_X, MAP_TOP, 6, MAP_BOT - MAP_TOP), C_DARK)
-	var top := roundf(MAP_BOT - (MAP_BOT - MAP_TOP) * k)
-	var col := C_ORANGE if k < 0.7 else (C_RED if fmod(t, 0.3) < 0.15 else C_YELLOW)
-	draw_rect(Rect2(MAP_X, top, 6, MAP_BOT - top), col)
-	_spr(SPR_HEAD, Vector2(MAP_X + 3, MAP_TOP - 8), {"h": C_HAIR, "s": C_SKIN, "k": C_BLACK}, false, 2)
+	draw_rect(Rect2(MAP_X, cur, 6, MAP_BOT - cur), C_GOLD)
+	var lv := _h_to_map(maxf(model.lava_h, 0.0))
+	var lcol := C_RED if fmod(t, 0.4) < 0.2 or model.height - model.lava_h > 15.0 else C_ORANGE
+	draw_rect(Rect2(MAP_X, lv, 6, MAP_BOT - lv), lcol)
+	# 今叫ぶとここまで跳べる（予告）
+	if model.can_shout():
+		var jy := _h_to_map(model.height + model.jump_height())
+		draw_rect(Rect2(MAP_X, jy, 6, cur - jy), Color(C_CYAN, 0.5))
+		draw_rect(Rect2(MAP_X - 2, jy, 10, 1), C_CYAN)
+	_spr(SPR_HEAD, Vector2(MAP_X + 3, cur), {"h": C_HAIR, "s": C_SKIN, "k": C_BLACK}, false, 2)
 	_spr(SPR_FIRE[int(t * 6.0) % 2], Vector2(MAP_X + 3, MAP_BOT + 14), {"y": C_YELLOW, "o": C_ORANGE, "w": C_RED}, false, 1)
 
 
 func _draw_hud() -> void:
 	# ファミコン風: 画面の上の端に、タイムと高さだけ
-	_shadow_label(Vector2(8, 20), "HI %dm" % maxi(best[difficulty], int(model.height)), C_WHITE)
-	_shadow_label(Vector2(FIELD_W - 8, 20), "%dm" % int(model.height), C_GOLD, HORIZONTAL_ALIGNMENT_RIGHT)
+	_shadow_label(Vector2(8, 20), "TIME %5.1f" % model.elapsed, C_WHITE)
+	_shadow_label(Vector2(FIELD_W - 8, 20), "%d/%dm" % [int(model.height), int(ThreadModel.GOAL)], C_GOLD, HORIZONTAL_ALIGNMENT_RIGHT)
 
 
 func _shadow_label(p: Vector2, txt: String, col: Color, align := HORIZONTAL_ALIGNMENT_LEFT) -> void:
@@ -1592,11 +1605,11 @@ func _draw_title() -> void:
 
 
 func _rank(sec: float) -> String:
-	if sec < 18.0:
+	if sec < 45.0:
 		return "S"
-	if sec < 26.0:
+	if sec < 52.0:
 		return "A"
-	if sec < 36.0:
+	if sec < 60.0:
 		return "B"
 	return "C"
 
@@ -1608,15 +1621,19 @@ func _draw_result() -> void:
 		var wx := W * 0.5
 		draw_rect(Rect2(wx - 150, 70, 300, 92), Color(C_BLACK, 0.45 * a))
 		_label(Vector2(wx, 102), "極楽に到達！", 32, Color(C_YELLOW, a), HORIZONTAL_ALIGNMENT_CENTER)
-		_label(Vector2(wx, 126), "%s  タイム %.1f秒  ランク %s" % [ThreadModel.DIFFICULTY_NAMES[difficulty], model.elapsed, _rank(model.elapsed)], 16, Color(C_WHITE, a), HORIZONTAL_ALIGNMENT_CENTER)
-		_label(Vector2(wx, 148), "踏み台にした罪人 %d人  最高+%dm  九死に一生%d回" % [model.total_stones, int(model.best_jump), model.clutches], 16, Color(C_WHITE, 0.8 * a), HORIZONTAL_ALIGNMENT_CENTER)
+		_label(Vector2(wx, 126), "TIME %.1f   RANK %s" % [model.elapsed, _rank(model.elapsed)], 16, Color(C_WHITE, a), HORIZONTAL_ALIGNMENT_CENTER)
+		if new_record:
+			if fmod(t, 0.4) < 0.28:
+				_label(Vector2(wx, 148), "NEW RECORD!", 16, Color(C_YELLOW, a), HORIZONTAL_ALIGNMENT_CENTER)
+		else:
+			_label(Vector2(wx, 148), "BEST %.1f" % best_time[difficulty], 16, Color(C_WHITE, 0.7 * a), HORIZONTAL_ALIGNMENT_CENTER)
 		if fmod(t, 1.0) < 0.6 and a >= 1.0:
-			_label(Vector2(wx, 346), "R・△ もう一度  N・□ 新コース", 16, C_WHITE, HORIZONTAL_ALIGNMENT_CENTER)
+			_label(Vector2(wx, 346), "PUSH START", 16, C_WHITE, HORIZONTAL_ALIGNMENT_CENTER)
 		return
 	draw_rect(Rect2(0, 0, FIELD_W, H), Color(C_BLACK, 0.8))
 	var cx := FIELD_W * 0.5
 	_label(Vector2(cx, 120), "GAME OVER", 32, C_RED, HORIZONTAL_ALIGNMENT_CENTER)
-	_label(Vector2(cx, 172), "%dm" % int(model.height), 32, C_GOLD, HORIZONTAL_ALIGNMENT_CENTER)
+	_label(Vector2(cx, 172), "%d/%dm" % [int(model.height), int(ThreadModel.GOAL)], 32, C_GOLD, HORIZONTAL_ALIGNMENT_CENTER)
 	if new_record:
 		if fmod(t, 0.4) < 0.28:
 			_label(Vector2(cx, 200), "NEW RECORD!", 16, C_YELLOW, HORIZONTAL_ALIGNMENT_CENTER)

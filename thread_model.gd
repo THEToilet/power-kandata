@@ -30,12 +30,11 @@ const DEFAULTS := {
 	"fire_mode": 0.0,        # 鬼火の動き 0=円（その場でぐるぐる） 1=波（その場で上下にふわふわ）
 	"hit_ghost_drop": 1.0,   # 落石・鬼火に当たったとき振り落とされる罪人（人）
 	"hazard_damage": 25.0,   # 落石・鬼火に当たったときの糸の傷み
-	"lava_speed": 4.0,       # 下から迫る業火の速さ（m/秒、はじめ）
-	"lava_accel": 0.12,      # 業火が1秒ごとに速くなる量（m/秒）
-	"lava_leash": 32.0,      # 業火はカンダタのこれより下には離れない（m）
+	"lava_speed": 6.0,       # 下から迫る業火の速さ（m/秒、はじめ）
+	"lava_accel": 0.25,      # 業火が1秒ごとに速くなる量（m/秒）
 }
 const TUNE_ORDER := ["climb_speed", "climb_wear", "sinner_gap_low", "sinner_gap_high", "drain_ghost", "ghost_power", "ghost_slow", "catch_damage", "slack_need", "jump_base", "jump_per_sinner", "jump_power", "clutch_frac", "clutch_mult",
-		"swing_power", "rock_interval", "rock_flight", "fire_gap", "fire_speed", "fire_mode", "hit_ghost_drop", "hazard_damage", "lava_speed", "lava_accel", "lava_leash"]
+		"swing_power", "rock_interval", "rock_flight", "fire_gap", "fire_speed", "fire_mode", "hit_ghost_drop", "hazard_damage", "lava_speed", "lava_accel"]
 const TUNE_LABEL := {
 	"climb_speed": "登る速さ", "slack_need": "切った後つかまれない余り（m）", "ghost_power": "大勢の重さ（べき乗）", "jump_power": "溜めジャンプの伸び（べき乗）",
 	"clutch_frac": "九死に一生の残り耐久（割合）", "clutch_mult": "九死に一生の倍率",
@@ -45,31 +44,31 @@ const TUNE_LABEL := {
 	"jump_base": "踏み台なしのジャンプ（m）", "jump_per_sinner": "踏み台1人あたりのジャンプ（m）", "shout_window": "叫べる時間（切れる何秒前から）",
 	"swing_power": "揺らす強さ", "rock_interval": "鬼が岩を投げる間隔（秒）", "rock_flight": "岩が届くまで（秒）",
 	"fire_gap": "鬼火の間隔（m）", "fire_speed": "鬼火の速さ", "fire_mode": "鬼火の動き（0円 1波）", "hit_ghost_drop": "当たると落ちる罪人（人）", "hazard_damage": "落石・鬼火の糸の傷み",
-	"lava_speed": "業火の速さ（はじめ）", "lava_accel": "業火の加速", "lava_leash": "業火との最大距離（m）",
+	"lava_speed": "業火の速さ（はじめ）", "lava_accel": "業火の加速"
 }
 const TUNE_STEP := {
 	"climb_speed": 0.5, "slack_need": 1.0, "ghost_power": 0.1, "jump_power": 0.1, "clutch_frac": 0.02, "clutch_mult": 0.1, "climb_wear": 0.5, "sinner_gap_low": 1.0, "sinner_gap_high": 1.0, "drain_ghost": 0.25, "ghost_slow": 0.02, "catch_damage": 2.5, "jump_base": 1.0, "jump_per_sinner": 1.0,
 	"shout_window": 0.25, "swing_power": 100.0, "rock_interval": 0.2, "rock_flight": 0.1,
 	"fire_gap": 5.0, "fire_speed": 0.25, "fire_mode": 1.0, "hit_ghost_drop": 1.0, "hazard_damage": 5.0,
-	"lava_speed": 0.5, "lava_accel": 0.01, "lava_leash": 5.0,
+	"lava_speed": 0.5, "lava_accel": 0.01
 }
 const TUNE_MIN := {
 	"climb_speed": 0.5, "slack_need": 0.0, "ghost_power": 1.0, "jump_power": 1.0, "clutch_frac": 0.0, "clutch_mult": 1.0, "climb_wear": 0.0, "sinner_gap_low": 2.0, "sinner_gap_high": 2.0, "drain_ghost": 0.25, "ghost_slow": 0.0, "catch_damage": 0.0, "jump_base": 0.0, "jump_per_sinner": 0.0,
 	"shout_window": 0.25, "swing_power": 100.0, "rock_interval": 0.2, "rock_flight": 0.1,
 	"fire_gap": 10.0, "fire_speed": 0.0, "fire_mode": 0.0, "hit_ghost_drop": 0.0, "hazard_damage": 0.0,
-	"lava_speed": 0.0, "lava_accel": 0.0, "lava_leash": 10.0,
+	"lava_speed": 0.0, "lava_accel": 0.0
 }
 
 # 難易度: 標準値の上に重ねる値（調整パネルで変えた値は、さらにその上に乗る）
 const DIFFICULTY_NAMES := ["やさしい", "ふつう", "むずかしい"]
 const DIFFICULTY_PRESETS := [
-	{"lava_speed": 3.0, "lava_accel": 0.08, "rock_interval": 3.2, "fire_gap": 80.0, "hazard_damage": 18.0, "climb_wear": 2.5, "sinner_gap_low": 8.0, "sinner_gap_high": 8.0},
+	{"lava_speed": 4.5, "lava_accel": 0.15, "rock_interval": 3.2, "fire_gap": 80.0, "hazard_damage": 18.0, "climb_wear": 2.5, "sinner_gap_low": 8.0, "sinner_gap_high": 8.0},
 	{},
-	{"lava_speed": 5.0, "lava_accel": 0.16, "rock_interval": 1.8, "fire_gap": 48.0, "hazard_damage": 30.0, "climb_wear": 4.0, "sinner_gap_low": 12.0, "sinner_gap_high": 12.0},
+	{"lava_speed": 7.0, "lava_accel": 0.3, "rock_interval": 1.8, "fire_gap": 48.0, "hazard_damage": 30.0, "climb_wear": 4.0, "sinner_gap_low": 12.0, "sinner_gap_high": 12.0},
 ]
 
-const GOAL := 1.0e9         # エンドレス（ゴールなし）。どこまで登れるかが記録
-const DIFF_RAMP := 1500.0     # この高さまでで、難しさが最大になる（m）
+const GOAL := 1000.0          # 極楽（ここに着いたらクリア）
+const DIFF_RAMP := 1000.0     # この高さまでで、難しさが最大になる（m）
 const GEN_AHEAD := 200.0      # カンダタの何 m 上までコースを作っておくか
 const DURABILITY_MAX := 100.0
 const FIRE_ORBIT := 110.0      # 鬼火の円の半径（px、固定）
@@ -182,7 +181,7 @@ func _generate(seed_value: int) -> void:
 
 func _generate_ahead() -> void:
 	# エンドレス: 登った分だけ、上にコースを継ぎ足していく。通り過ぎたものは捨てる
-	while gen_fire_h < height + GEN_AHEAD:
+	while gen_fire_h < minf(height + GEN_AHEAD, GOAL - 15.0):
 		# 中心は 左・中央・右 の三択（同じ場所が続かないように）。円の大きさは固定
 		var lane := rng.randi_range(0, 2)
 		while lane == gen_last_lane:
@@ -192,7 +191,7 @@ func _generate_ahead() -> void:
 				"r": FIRE_ORBIT, "w": rng.randf_range(1.6, 2.4) * (1.0 if rng.randf() < 0.5 else -1.0),
 				"phase": rng.randf() * TAU})
 		gen_fire_h += cfg.fire_gap * lerpf(1.3, 0.65, ramp(gen_fire_h)) * rng.randf_range(0.7, 1.3)
-	while gen_perch_h < height + GEN_AHEAD:
+	while gen_perch_h < minf(height + GEN_AHEAD, GOAL - 12.0):
 		var n := 1
 		if rng.randf() < 0.25 + 0.2 * ramp(gen_perch_h):   # ときどき2人組（上ほど多い）
 			n += 1
@@ -304,6 +303,9 @@ func step(delta: float, want_climb: bool, want_shout: bool, swing: float, want_d
 		if air_left <= 0.0:
 			height = air_to
 			state = State.CLIMBING
+		if height >= GOAL:
+			height = GOAL
+			state = State.WON
 		return
 
 	if want_shout and can_shout():
@@ -337,6 +339,9 @@ func step(delta: float, want_climb: bool, want_shout: bool, swing: float, want_d
 		durability = 0.0
 		state = State.TORN
 		death = "wear"
+	elif height >= GOAL:
+		height = GOAL
+		state = State.WON
 	_update_window()
 
 
@@ -367,7 +372,7 @@ func _update_rocks(delta: float) -> void:
 	if state == State.AIR:   # 跳んでいる間は投げない（着地した場所を見てから投げる）
 		rock_timer = maxf(rock_timer, 0.7)
 	rock_timer -= delta
-	if rock_timer <= 0.0 and state == State.CLIMBING:
+	if rock_timer <= 0.0 and state == State.CLIMBING and height < GOAL - 30.0:
 		rock_timer = cfg.rock_interval * lerpf(1.3, 0.6, ramp(height)) * rng.randf_range(0.6, 1.4)
 		var lead: float = cfg.climb_speed * (ONI_WINDUP + cfg.rock_flight) if rng.randf() < 0.5 else 0.0
 		var ax: float = x + rng.randf_range(-30.0, 30.0) if rng.randf() < 0.6 else rng.randf_range(-X_LIMIT * 0.7, X_LIMIT * 0.7)
@@ -414,9 +419,8 @@ func _update_rocks(delta: float) -> void:
 
 
 func _update_lava(delta: float) -> void:
-	# 下から業火がせり上がる。離れすぎないように、カンダタの lava_leash m 下までは詰めてくる
+	# 下から業火がせり上がる。跳んで引き離せば下に置いていける。速さは少しずつ上がる
 	lava_h += lava_speed() * delta
-	lava_h = maxf(lava_h, height - cfg.lava_leash)
 	# ぶら下がった罪人は、下の者から焼かれて落ちる
 	if state == State.CLIMBING and ghosts >= 1.0:
 		var room := floorf((height - lava_h) / GHOST_SPACING) - 1.0

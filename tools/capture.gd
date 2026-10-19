@@ -53,7 +53,7 @@ func _process(_d: float) -> void:
 		return
 	var m = main.model
 	if main.phase == main.Phase.PLAY and not main.panel_open:
-		var inp: Array = Bot.bot_inputs(m, margin, "n3", "smart", 30)
+		var inp: Array = Bot.bot_inputs(m, margin, "n2", "smart", 30)
 		main.bot_climb = inp[0]
 		main.bot_shout = inp[1]
 		main.bot_swing = inp[2]
