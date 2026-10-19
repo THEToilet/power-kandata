@@ -49,7 +49,7 @@ const C_ORANGE := P_ORANGE
 const C_YELLOW := P_YELLOW
 const C_GOLD := P_YELLOW
 const C_SKIN := P_PEACH
-const C_HAIR := P_BLACK
+const C_HAIR := P_RED
 const C_CLOTH := P_BROWN
 const C_GHOST := P_LAV
 const C_GHOST_D := P_DGREY
@@ -81,7 +81,7 @@ const SPR_KANDATA := [
 	"....s.hhhhhhs.....",
 	"....shhhhhhhhs....",
 	"...shhhhhhhhhhs...",
-	"...shshhsshhshs...",
+	"...shsssssssshs...",
 	"..s..ssksskss..s..",
 	"..s..ssksskss..s..",
 	"..s..ssssssss..s..",
@@ -107,7 +107,7 @@ const SPR_KANDATA_JUMP := [
 	".s....hhhhhh....s.",
 	".s...hhhhhhhh...s.",
 	".s..hhhhhhhhhh..s.",
-	".s..hshhsshhsh..s.",
+	".s..hssssssssh..s.",
 	".s...ssksskss...s.",
 	"..s..ssksskss..s..",
 	"..s..ssssssss..s..",
@@ -134,7 +134,7 @@ const SPR_KANDATA_REACH := [
 	"....s.hhhhhh......",
 	"....shhhhhhhh.....",
 	"...shhhhhhhhhh....",
-	"...shshhsshhsh....",
+	"...shssssssssh....",
 	"..s..ssksskss.....",
 	"..s..ssksskss.....",
 	"..s..ssssssss.....",
@@ -158,7 +158,7 @@ const SPR_GHOST := [
 	".s..hhhhhh.....",
 	"s..hhhhhhhh....",
 	"s.hhhhhhhhhh...",
-	"s.hshhsshhsh...",
+	"s.hssssssssh...",
 	"s..ssksskss....",
 	"s..ssksskss....",
 	"s..ssssssss....",
@@ -180,7 +180,7 @@ const SPR_GHOST_RUN := [
 	".s..hhhhhh.....",
 	"s..hhhhhhhh....",
 	"s.hhhhhhhhhh...",
-	"s.hshhsshhsh...",
+	"s.hssssssssh...",
 	"s..ssksskss....",
 	"s..ssksskss....",
 	"s..ssssssss....",
@@ -247,7 +247,7 @@ const SPR_ONI_THROW := [
 ]
 const ONI_PAL := {"r": P_RED, "d": P_DPURP, "y": P_WHITE, "h": P_BLACK,
 		"w": P_WHITE, "k": P_BLACK, "t": P_YELLOW, "b": P_BLACK}
-const GHOST_HAIR := [P_BLACK, P_DBLUE, P_BROWN, P_DGREY]
+const GHOST_HAIR := [P_DGREY, P_LAV, P_DBLUE, P_DPURP]
 const SPR_FIRE := [
 	[
 		"........o.......",
@@ -823,7 +823,7 @@ func _process(delta: float) -> void:
 			_on_shout(ghosts_before, x_before)
 		if prev_state == ThreadModel.State.AIR and model.state == ThreadModel.State.CLIMBING:
 			# 上の糸をつかんだ瞬間の火花
-			_burst(Vector2(_sx(model.x), _player_sy() - 22.0), 14, [C_YELLOW, C_WHITE], 60.0, 1.0, 0.4, 0.0)
+			_burst(Vector2(_sx(model.x), _player_sy() - 22.0), 6, [P_WHITE], 40.0, 2.0, 0.3, 0.0)
 		if model.hits > hits_before:
 			_burst(Vector2(_sx(model.x), _player_sy()), 30, [C_ORANGE, C_YELLOW, C_RED], 110.0, 2.0, 0.6, 60.0)
 			fx_hit = 0.5
@@ -948,7 +948,7 @@ func _save_records() -> void:
 func _on_shout(n_ghosts: int, from_x: float) -> void:
 	var sp := Vector2(_sx(from_x), _sy(model.air_from))
 	var big := clampi(model.last_stones, 1, 6)
-	_burst(sp, 20 + big * 10, [C_YELLOW, C_WHITE, C_ORANGE], 90.0 + big * 20.0, 2.0, 0.7, 0.0)   # 叫びの火花
+	_burst(sp, 10 + big * 4, [P_WHITE, P_LGREY], 80.0 + big * 15.0, 2.0, 0.5, 0.0)   # 叫びの白い粒
 	# 衝撃波で消し飛んだ岩と鬼火
 	for b in model.last_blast:
 		var bp := Vector2(_sx(b.x), _sy(b.h))
@@ -1238,39 +1238,23 @@ func _spr(rows: Array, pos: Vector2, pal: Dictionary, flip := false, sc := 2) ->
 
 func _draw_world() -> void:
 	# 背景: 高いほど地獄の赤 → 闇 → 極楽の金（帯で段階的に）
-	# 空の帯: 下のマグマに照らされて、下ほど赤紫、上ほど暗い。境目は1行おきの横線で（PICO-8 風）
-	var r := clampf(cam_h / ThreadModel.GOAL, 0.0, 1.0)
-	var bands: Array = [P_BLACK, P_DBLUE, P_DPURP, P_RED] if r < 0.75 else [P_DBLUE, P_DBLUE, P_LAV, P_BLUE]
-	var edges := [0.0, 0.28, 0.62, 0.9]     # 各色の始まり（画面の高さの割合）
-	for bi in range(bands.size()):
-		var y0: float = H * edges[bi]
-		var y1: float = H * (edges[bi + 1] if bi + 1 < edges.size() else 1.0)
-		_px(Rect2(0, y0, FIELD_W, y1 - y0), bands[bi])
-		if bi > 0:   # 境目: 前の色の横線を1行おきに残す
-			for k in range(4):
-				_px(Rect2(0, y0 + k * 4.0, FIELD_W, 2 if k < 2 else 1), bands[bi - 1])
-	# 遠くの岩の塔（シルエット、ゆっくり流れる）。てっぺんで炎がゆれる
-	var scroll := cam_h * PPM * 0.25
-	var seg := 90.0
-	var first := floori(scroll / seg) - 1
-	for n in range(first, first + int(H / seg) + 3):
-		var hsh := absi(n * 7919) % 97
-		var sx := float(hsh * 37 % int(FIELD_W - 120)) + 60.0
-		var base_y := H - (float(n) * seg - scroll) - 40.0
-		var tall := 60.0 + float(hsh % 5) * 18.0
-		var wid := 18.0 + float(hsh % 3) * 8.0
-		var tip := Vector2(roundf(sx), roundf(base_y - tall))
-		draw_colored_polygon(PackedVector2Array([Vector2(sx - wid, base_y + 30), Vector2(sx - wid * 0.4, base_y - tall * 0.6),
-				tip, Vector2(sx + wid * 0.4, base_y - tall * 0.5), Vector2(sx + wid, base_y + 30)]), P_BLACK)
-		if hsh % 3 == 0:
-			_spr(SPR_FIRE[int(t * 6.0 + n) % 2], tip + Vector2(0, -8), {"y": P_YELLOW, "o": P_ORANGE, "w": P_RED}, false, 2)
+	# 背景（セレステのエッセンス）: 黒地に、藍色の横長の雲がゆっくり流れるだけ。下のほうはマグマの照り返しで紫
+	_px(Rect2(0, 0, FIELD_W, H), P_BLACK)
+	for i in range(16):
+		var bw := 48.0 + float((i * 37) % 5) * 26.0
+		var bh := 8.0 + float(i % 3) * 6.0
+		var spd := 5.0 + float(i % 4) * 4.0
+		var by := fmod(i * 47.0 + cam_h * PPM * 0.3, H + 60.0) - 30.0
+		var bx := fmod(i * 97.0 + t * spd, FIELD_W + bw) - bw
+		var bc: Color = P_DPURP if by > H * 0.72 else P_DBLUE
+		_px(Rect2(bx, by, bw, bh), bc)
 	# 舞い上がる火の粉
-	for i in range(18):
-		var ex := fmod(i * 53.0 + sin(t + i) * 6.0, FIELD_W)
-		var ey := fmod(i * 71.0 - t * (12.0 + i % 5 * 4.0) + cam_h * PPM * 0.3, H)
+	for i in range(24):   # 雪の代わりの火の粉: 小さな点がふわふわ上がる
+		var ex := fmod(i * 53.0 + sin(t * 0.8 + i) * 10.0, FIELD_W)
+		var ey := fmod(i * 71.0 - t * (8.0 + i % 5 * 4.0) + cam_h * PPM * 0.3, H)
 		if ey < 0:
 			ey += H
-		_px(Rect2(roundf(ex), roundf(ey), 2, 2), P_ORANGE if i % 3 else P_RED)
+		_px(Rect2(roundf(ex), roundf(ey), 2, 2), [P_WHITE, P_LGREY, P_ORANGE][i % 3])
 	# 遠景の針山（手前よりゆっくり流れる）
 	_draw_needle_mountains()
 	# 左右の崖（揺れられる範囲の外）
@@ -1329,9 +1313,15 @@ func _draw_world() -> void:
 		# 岩棚: 画面の端から崖の縁まで続く道
 		var sx_a: float = 0.0 if left else lip - 6.0
 		var sw: float = lip + 6.0 if left else FIELD_W - lip + 6.0
-		_px(Rect2(sx_a, py0, sw, 5), C_CLIFF_D)
-		_px(Rect2(sx_a, py0, sw, 1), C_CLIFF_L)
-		_px(Rect2(lip - 2.0 if left else lip - 6.0, py0 + 5, 8, 2), C_CLIFF_D)
+		# 罪人の岩棚は控えめに: 灰色の岩に白っぽいでこぼこの縁（溶岩の赤は鬼の岩棚だけ）
+		_px(Rect2(sx_a, py0, sw, 8), P_DGREY)
+		var lbx := sx_a
+		var lk := 0
+		while lbx < sx_a + sw:
+			_px(Rect2(lbx, py0 - (2.0 if lk % 2 == 0 else 0.0), 6, 2), P_LGREY)
+			lbx += 6.0
+			lk += 1
+		_px(Rect2(sx_a, py0 + 8, sw, 2), P_BLACK)
 		# 近づくと、端から縁へ走ってくる（飛びかかる位置まで）
 		var run_k := clampf((model.height - (pc.h - ThreadModel.SINNER_TRIGGER - 10.0)) / 10.0, 0.0, 1.0)
 		if run_k <= 0.0:
@@ -1381,8 +1371,6 @@ func _draw_world() -> void:
 		if show_oni and feet > -20.0 and oni_c.y - 40.0 < H:
 			var sx_b: float = 0.0 if left3 else lip3 - 10.0
 			var sw2: float = lip3 + 10.0 if left3 else FIELD_W - lip3 + 10.0
-			_px(Rect2(sx_b, feet, sw2, 5), C_CLIFF_D)
-			_px(Rect2(sx_b, feet, sw2, 1), C_CLIFF_L)
 			var rise := clampf(rk.t / 0.15, 0.0, 1.0)            # 岩棚の下から現れる
 			var sink := clampf((tau - 0.6) / 0.3, 0.0, 1.0)      # 投げたあと引っこむ
 			var off := roundf((1.0 - rise + sink) * 27.0)
@@ -1390,9 +1378,8 @@ func _draw_world() -> void:
 			var spr2: Array = SPR_ONI_UP if tau <= 0.0 else SPR_ONI_THROW
 			_spr(spr2, oni_c + Vector2(0, off), ONI_PAL, not left3, SC)
 			if off > 0.0:   # 岩棚の下に隠れている部分を、崖の色で覆う
-				_px(Rect2(oni_c.x - 20.0, feet + 1.0, 40, off + 2.0), C_CLIFF)
-			_px(Rect2(sx_b, feet, sw2, 4), C_CLIFF_D)
-			_px(Rect2(sx_b, feet, sw2, 1), C_CLIFF_L)
+				_px(Rect2(oni_c.x - 20.0, feet + 1.0, 40, off + 2.0), P_DGREY)
+			_draw_lava_ledge(sx_b, feet, sw2)
 		if tau <= 0.0:
 			# 振りかぶり中: 頭上の岩と、飛んでいく道筋（赤い点線）
 			var shake2 := roundf(sin(t * 50.0) * 1.0)
@@ -1597,48 +1584,60 @@ func _draw_heat_edge() -> void:
 
 
 func _cliff_edge(world_y: float, left: bool) -> float:
-	# 崖の縁のでこぼこ（世界の高さに固定。登っても形が流れていくように）
-	var n := sin(world_y * 0.9 + (0.0 if left else 2.0)) * 3.0 + sin(world_y * 0.23 + (1.0 if left else 4.0)) * 5.0
+	# 崖の縁: 45度の斜めの出っぱり（セレステの岩の切り口）。世界の高さに固定
+	var u := world_y * PPM
+	var seg := floori(u / 24.0)
+	var hsh := absi(seg * 73 + (11 if left else 37)) % 5
+	var local := fmod(u, 24.0)
+	if local < 0.0:
+		local += 24.0
+	var off := 0.0
+	if hsh >= 2:
+		off = 12.0 - absf(local - 12.0)          # 傾き1 = 45度
+		if hsh == 4:
+			off = minf(off, 6.0) + 6.0           # 台形
 	var base: float = _sx(-ThreadModel.X_LIMIT - ThreadModel.BODY_W) if left else _sx(ThreadModel.X_LIMIT + ThreadModel.BODY_W)
-	return roundf(base + (n - 4.0 if left else -n + 4.0))
+	return roundf(base + (off if left else -off))
 
 
 func _draw_cliffs() -> void:
+	# 灰色の大きな岩。ところどころ黒い四角の穴
 	for side in [true, false]:
 		var left: bool = side
 		var yy := 0.0
 		while yy < H:
-			var wy := (PLAYER_SY - yy) / PPM + cam_h   # この行の世界の高さ（m）
+			var wy := (PLAYER_SY - yy) / PPM + cam_h
 			var ex := _cliff_edge(wy, left)
 			var x0: float = 0.0 if left else ex
 			var w: float = ex if left else FIELD_W - ex
-			# 岩の地層: 世界に固定した横縞
-			var band := int(floorf(wy / 2.5)) % 3
-			_px(Rect2(x0, yy, w, 2), P_DBLUE)
-			# 石積みの目地（世界に固定。段ごとに縦の目地をずらす）
-			var wpx := wy * PPM
-			var course_i := int(floorf(wpx / 24.0))
-			if fmod(wpx, 24.0) < 3.0:
-				_px(Rect2(x0, yy, w, 2), P_BLACK)
-			else:
-				var jx := 16.0 if course_i % 2 == 0 else 0.0
-				var gx2 := jx
-				while gx2 < w:
-					var bxx: float = (x0 + gx2) if left else (ex + gx2)
-					_px(Rect2(bxx, yy, 3, 2), P_BLACK)
-					if (course_i * 3 + int(gx2 / 32.0) * 5) % 7 == 0:   # ところどころ紫の石
-						_px(Rect2(bxx + 3.0, yy, minf(29.0, w - gx2 - 3.0), 2), P_DPURP)
-					gx2 += 32.0
-			# 縁: 岩肌の明るい面と、輪郭
-			_px(Rect2(ex - 3.0 if left else ex, yy, 3, 2), P_LAV)
-			_px(Rect2(ex - 3.0 if left else ex + 2.0, yy, 1, 2), P_WHITE if band == 0 else P_LAV)
+			_px(Rect2(x0, yy, w, 2), P_DGREY)
 			yy += 2.0
-		# ひび割れ（世界に固定）
-		var m0 := floori(cam_h - 70.0)
-		for k in range(m0, m0 + 140, 7):
-			var cy := _sy(float(k))
-			var cx: float = (8.0 + float((k * 37) % 50)) if left else (FIELD_W - 10.0 - float((k * 41) % 50))
-			_px(Rect2(cx, cy, 6, 2), P_BLACK)
+		var m0 := floori((cam_h - 80.0) / 4.0)
+		for k in range(m0, m0 + 60):
+			var hsh := absi(k * 7919 + (3 if left else 5)) % 11
+			if hsh > 3:
+				continue
+			var cy := _sy(float(k) * 4.0)
+			var span := 60.0
+			var cx: float = (6.0 + float((k * 37) % int(span))) if left else (FIELD_W - 12.0 - float((k * 41) % int(span)))
+			var sz := 4.0 if hsh < 3 else 8.0
+			_px(Rect2(cx, cy, sz, sz), P_BLACK)
+
+
+func _draw_lava_ledge(x: float, y: float, w: float) -> void:
+	# 溶岩のかたまり（セレステの氷のかたまりの代わり）: 赤い塊に、明るいもこもこの縁
+	_px(Rect2(x, y, w, 10), P_RED)
+	_px(Rect2(x, y, w, 2), P_PEACH)
+	var bx := x
+	var k := 0
+	while bx < x + w:
+		if k % 2 == 0:
+			_px(Rect2(bx, y - 2, 4, 2), P_PEACH)
+		if k % 3 == 1:
+			_px(Rect2(bx + 1, y + 5, 2, 2), P_ORANGE)
+		bx += 6.0
+		k += 1
+	_px(Rect2(x, y + 10, w, 2), P_DPURP)
 
 
 func _draw_needle_mountains() -> void:
@@ -1911,9 +1910,11 @@ func _ghost_pal(i: int) -> Dictionary:
 
 
 func _draw_kandata(p: Vector2) -> void:
-	var pal := {"s": C_SKIN, "h": C_HAIR, "k": C_BLACK, "m": C_RED, "c": C_CLOTH}
+	# 髪で状態を見せる（セレステのマデリンの髪のように）: 叫べる＝赤、踏み台なし＝茶、九死に一生の圏内＝金に明滅
+	var hair: Color = P_RED if model.can_shout() else P_BROWN
 	if model.is_clutch() and model.can_shout() and fmod(t, 0.16) < 0.08:
-		pal["s"] = C_GOLD   # 九死に一生の圏内は金色に明滅
+		hair = P_YELLOW
+	var pal := {"s": C_SKIN, "h": hair, "k": C_BLACK, "m": C_RED, "c": C_CLOTH}
 	if model.stun_left > 0.0:
 		pal["s"] = P_PINK
 	var lean := clampf(model.vx * 0.01, -4.0, 4.0)
