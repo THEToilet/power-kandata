@@ -53,7 +53,7 @@ func _process(_d: float) -> void:
 		return
 	var m = main.model
 	if main.phase == main.Phase.PLAY and not main.panel_open:
-		var inp: Array = Bot.bot_inputs(m, margin, "n1", "greedy")
+		var inp: Array = Bot.bot_inputs(m, margin, "n3", "smart", 30)
 		main.bot_climb = inp[0]
 		main.bot_shout = inp[1]
 		main.bot_swing = inp[2]
@@ -89,6 +89,20 @@ func _process(_d: float) -> void:
 		if m.dashing and m.elapsed > 1.0 and not shots.has("dash"):
 			shots["dash"] = true
 			_snap("dash")
+		if m.state == ThreadModel.State.AIR and m.air_to - m.air_from > 40.0:
+			var kk: float = 1.0 - m.air_left / ThreadModel.AIR_TIME
+			for nm in ["bigjump_a", "bigjump_b", "bigjump_c"]:
+				var th: float = {"bigjump_a": 0.15, "bigjump_b": 0.5, "bigjump_c": 0.9}[nm]
+				if kk > th and not shots.has(nm):
+					shots[nm] = true
+					_snap(nm)
+		var gap: float = m.height - m.lava_h
+		if gap < 34.0 and m.lava_h > 0.0 and not shots.has("lava1"):
+			shots["lava1"] = true
+			_snap("lava1")
+		if gap < 16.0 and m.lava_h > 0.0 and not shots.has("lava2"):
+			shots["lava2"] = true
+			_snap("lava2")
 		for rk in m.rocks:
 			var tau: float = m.rock_tau(rk)
 			if tau > -0.4 and tau < -0.3 and m.elapsed > 4.0 and not shots.has("oni"):

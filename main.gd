@@ -8,7 +8,7 @@ const W := 640.0
 const H := 360.0
 const FIELD_W := 616.0       # 遊ぶ画面の幅（右端の細い高度バー以外ぜんぶ）
 const THREAD_X := 308.0      # 揺れの中心
-const PLAYER_SY := 200.0     # カンダタを置く高さ
+const PLAYER_SY := 236.0     # カンダタを置く高さ
 const PPM := 3.5             # 1m あたりのドット
 const XS := 0.7              # モデルの横位置（px@1280）→ 画面ドット
 const GHOST_GAP := 12.0
@@ -600,9 +600,15 @@ func _process(delta: float) -> void:
 	if phase == Phase.RESULT and model.state == ThreadModel.State.TORN:
 		fall_t += delta
 
-	cam_h = lerpf(cam_h, model.height, minf(1.0, delta * 6.0))
+	# カメラ: 跳んでいる間は着地点へ先回りして、上の景色を先に見せる
+	var cam_target: float = model.air_to if model.state == ThreadModel.State.AIR else model.height
+	cam_h = lerpf(cam_h, cam_target, minf(1.0, delta * (9.0 if model.state == ThreadModel.State.AIR else 6.0)))
+	# カンダタが画面の外へ出ないように
+	cam_h = clampf(cam_h, model.height - (PLAYER_SY - 30.0) / PPM, model.height + (H - 40.0 - PLAYER_SY) / PPM)
 	_update_particles(delta)
 	ring_nope = maxf(0.0, ring_nope - delta)
+	if phase == Phase.PLAY and model.height - model.lava_h < 15.0:
+		shake = maxf(shake, 0.12)   # マグマが足元に迫ると地鳴り
 	if phase == Phase.PLAY:
 		_update_tips(delta)
 
@@ -670,6 +676,8 @@ func _update_particles(delta: float) -> void:
 	# カメラが上がった分だけ下へずらす（世界に貼りついて見えるように）
 	var dy := (cam_h - prev_cam) * PPM
 	prev_cam = cam_h
+	for f in falling_ghosts:   # 落ちていく罪人も、カメラに合わせて流す
+		f[0].y += dy
 	for p in parts:
 		p[0].y += dy
 		p[1].y += p[6] * delta
@@ -716,8 +724,13 @@ func _update_particles(delta: float) -> void:
 	# 蹴落とされた罪人の赤い尾
 	# 業火の火の粉
 	var lt := _sy(model.lava_h)
-	if lt < H + 4.0:
-		for k in range(2):
+	if lt < H + 4.0 and model.lava_h >= 0.0:
+		if randf() < 0.12:   # 跳ねるしぶき
+			var sx3 := randf() * FIELD_W
+			for k in range(6):
+				_part(Vector2(sx3, lt), Vector2(randf_range(-30, 30), randf_range(-110, -50)), randf_range(0.5, 0.8),
+						[C_YELLOW, C_ORANGE][k % 2], 2.0, 260.0)
+		for k in range(3):
 			_part(Vector2(randf() * FIELD_W, lt), Vector2(randf_range(-8, 8), randf_range(-60, -25)), randf_range(0.5, 1.1),
 					[C_ORANGE, C_YELLOW, C_RED][randi() % 3], 1.0, 10.0)
 	# 極楽の穴から降る光の粒
@@ -1084,12 +1097,14 @@ func _draw_world() -> void:
 			if end_y < last.y:
 				tip = last.lerp(Vector2(last.x, end_y), 1.0)
 			pts.append(tip)
-			draw_polyline(pts, tc, 1.0)
+			if pts.size() >= 2:
+				draw_polyline(pts, tc, 1.0)
 			# ちぎれた端のほつれ
 			draw_rect(Rect2(tip.x - 1, tip.y, 1, 2), Color(tc, 0.7))
 			draw_rect(Rect2(tip.x + 1, tip.y + 1, 1, 2), Color(tc, 0.7))
 		else:
-			draw_polyline(pts, tc, 1.0)
+			if pts.size() >= 2:
+				draw_polyline(pts, tc, 1.0)
 		for g in range(int(model.ghosts)):
 			var gy := py + 46.0 + g * GHOST_GAP
 			if gy > H + 10.0:
@@ -1142,6 +1157,7 @@ func _draw_world() -> void:
 
 	_draw_lava()
 	_draw_particles()
+	_draw_heat_edge()
 
 	# 案内: 初めてその場面になったときだけ、下にそっと出る
 	if phase == Phase.PLAY and tip_text != "":
@@ -1158,32 +1174,67 @@ const C_CLIFF_L := Color8(92, 66, 60)
 
 
 func _draw_lava() -> void:
-	# 下から迫る業火
+	# 下から迫るマグマ。地面より下にいるうちは、地面の割れ目から光が漏れるだけ
 	var top := _sy(model.lava_h)
-	if top > H + 6.0:
+	var ground_y := _sy(0.0) + 16.0
+	if model.lava_h < 0.0:
+		if ground_y < H:
+			var glow := clampf(1.0 - (-model.lava_h) / 40.0, 0.0, 1.0)
+			for i in range(0, int(FIELD_W), 23):
+				var cy := ground_y + 6.0 + float((i * 7) % 20)
+				if cy < H:
+					draw_rect(Rect2(i, cy, 8 + (i % 3) * 3, 1), Color(C_ORANGE, 0.25 + 0.6 * glow * (0.6 + 0.4 * sin(t * 4.0 + i))))
 		return
-	# 熱気
-	for i in range(6):
-		draw_rect(Rect2(0, top - 6.0 - i * 6.0, FIELD_W, 6), Color(C_ORANGE, 0.12 - i * 0.018))
-	draw_rect(Rect2(0, top + 3.0, FIELD_W, H - top + 10.0), C_BLOOD)
+	if top > H + 8.0:
+		return
+	# 熱気: 上へ行くほど薄くなる橙の層（ゆらゆら）
+	for i in range(10):
+		var hy := top - 4.0 - i * 5.0
+		draw_rect(Rect2(0, hy + roundf(sin(t * 2.0 + i) * 1.0), FIELD_W, 5), Color(C_ORANGE, 0.16 - i * 0.015))
+	# 本体: 深いところほど暗い赤
+	var depth_cols := [C_RED, Color8(170, 30, 24), Color8(130, 20, 22), C_BLOOD, Color8(70, 10, 16)]
+	for i in range(5):
+		draw_rect(Rect2(0, top + 4.0 + i * 8.0, FIELD_W, 8 if i < 4 else H - top + 10.0), depth_cols[i])
+	# 表面: 二つの波を重ねた、うねる縁
 	var x := 0.0
 	while x < FIELD_W:
-		var wy := roundf(top + sin(x * 0.08 + t * 3.0) * 2.0 + sin(x * 0.031 - t * 2.1) * 2.0)
-		draw_rect(Rect2(x, wy, 2, 6), C_RED)
-		draw_rect(Rect2(x, wy, 2, 2), C_ORANGE)
-		if int(x + t * 20.0) % 14 < 3:
-			draw_rect(Rect2(x, wy, 2, 1), C_YELLOW)
-		# 溶岩の模様
-		var ly := wy + 10.0 + roundf(absf(sin(x * 0.05 + t)) * 12.0)
-		if ly < H:
-			draw_rect(Rect2(x, ly, 2, 2), Color(C_RED, 0.7))
+		var w1 := sin(x * 0.07 + t * 2.6) * 2.5 + sin(x * 0.023 - t * 1.7) * 3.0
+		var wy := roundf(top + w1)
+		draw_rect(Rect2(x, wy - 1.0, 2, 3), C_YELLOW)
+		draw_rect(Rect2(x, wy + 2.0, 2, 4), C_ORANGE)
+		if int(x * 0.5 + t * 30.0) % 19 < 2:
+			draw_rect(Rect2(x, wy - 2.0, 2, 1), C_WHITE)   # きらめき
 		x += 2.0
-	# 泡
-	for k in range(5):
-		var bx := fmod(k * 97.0 + 30.0, FIELD_W)
-		var ph := fmod(t * 0.7 + k * 0.37, 1.0)
-		if ph < 0.25:
-			draw_circle(Vector2(bx, top + 2.0), 2.0 + ph * 8.0, Color(C_ORANGE, 0.8 - ph * 3.0))
+	# 表面を流れる黒い固まり（冷えた溶岩）と、その割れ目の光
+	for k in range(9):
+		var cx := fmod(k * 71.0 + t * (8.0 + k % 3 * 5.0) * (1.0 if k % 2 == 0 else -1.0), FIELD_W + 60.0)
+		if cx < 0.0:
+			cx += FIELD_W + 60.0
+		cx -= 30.0
+		var cw := 14.0 + float(k % 4) * 6.0
+		var cy2 := top + 7.0 + float(k % 3) * 7.0
+		draw_rect(Rect2(roundf(cx), roundf(cy2), cw, 3), Color8(60, 14, 14))
+		draw_rect(Rect2(roundf(cx + cw * 0.4), roundf(cy2 + 1.0), 3, 1), C_ORANGE)
+	# 泡: ふくらんで、はじける
+	for k in range(7):
+		var bx := fmod(k * 89.0 + 23.0 + floorf(t * 0.6 + k * 0.31) * 137.0, FIELD_W)
+		var ph := fmod(t * 0.6 + k * 0.31, 1.0)
+		if ph < 0.35:
+			var rr := 1.0 + ph * 14.0
+			draw_arc(Vector2(bx, top + 2.0), rr, PI, TAU, 10, C_YELLOW, 1.0)
+			draw_circle(Vector2(bx, top + 3.0), rr - 1.0, Color(C_ORANGE, 0.8))
+
+
+func _draw_heat_edge() -> void:
+	# マグマが近いと、画面の下の縁が赤く脈打つ
+	var gap: float = model.height - model.lava_h
+	if gap > 25.0 or phase != Phase.PLAY:
+		return
+	var k := clampf(1.0 - gap / 25.0, 0.0, 1.0) * (0.6 + 0.4 * absf(sin(t * 6.0)))
+	for i in range(8):
+		draw_rect(Rect2(0, H - 8.0 - i * 6.0, FIELD_W, 6), Color(C_RED, 0.3 * k * (1.0 - i / 8.0)))
+		draw_rect(Rect2(i * 4.0, 0, 4, H), Color(C_RED, 0.12 * k * (1.0 - i / 8.0)))
+		draw_rect(Rect2(FIELD_W - 4.0 - i * 4.0, 0, 4, H), Color(C_RED, 0.12 * k * (1.0 - i / 8.0)))
 
 
 func _cliff_edge(world_y: float, left: bool) -> float:

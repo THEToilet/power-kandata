@@ -32,7 +32,7 @@ const DEFAULTS := {
 	"hazard_damage": 25.0,   # 落石・鬼火に当たったときの糸の傷み
 	"lava_speed": 4.0,       # 下から迫る業火の速さ（m/秒、はじめ）
 	"lava_accel": 0.12,      # 業火が1秒ごとに速くなる量（m/秒）
-	"lava_leash": 60.0,      # 業火はカンダタのこれより下には離れない（m）
+	"lava_leash": 32.0,      # 業火はカンダタのこれより下には離れない（m）
 }
 const TUNE_ORDER := ["climb_speed", "climb_wear", "sinner_gap_low", "sinner_gap_high", "drain_ghost", "ghost_power", "ghost_slow", "catch_damage", "slack_need", "jump_base", "jump_per_sinner", "jump_power", "clutch_frac", "clutch_mult",
 		"swing_power", "rock_interval", "rock_flight", "fire_gap", "fire_speed", "fire_mode", "hit_ghost_drop", "hazard_damage", "lava_speed", "lava_accel", "lava_leash"]
@@ -364,8 +364,10 @@ func rock_tau(r: Dictionary) -> float:
 
 func _update_rocks(delta: float) -> void:
 	# 崖の鬼が岩を投げる。狙いは「今の場所」か「登り続けたら来る場所」のどちらか
+	if state == State.AIR:   # 跳んでいる間は投げない（着地した場所を見てから投げる）
+		rock_timer = maxf(rock_timer, 0.7)
 	rock_timer -= delta
-	if rock_timer <= 0.0:
+	if rock_timer <= 0.0 and state == State.CLIMBING:
 		rock_timer = cfg.rock_interval * lerpf(1.3, 0.6, ramp(height)) * rng.randf_range(0.6, 1.4)
 		var lead: float = cfg.climb_speed * (ONI_WINDUP + cfg.rock_flight) if rng.randf() < 0.5 else 0.0
 		var ax: float = x + rng.randf_range(-30.0, 30.0) if rng.randf() < 0.6 else rng.randf_range(-X_LIMIT * 0.7, X_LIMIT * 0.7)
