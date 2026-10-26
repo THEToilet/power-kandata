@@ -10,6 +10,7 @@ const FIELD_W := 616.0       # 遊ぶ画面の幅（右端の細い高度バー�
 const THREAD_X := 308.0      # 揺れの中心
 const PLAYER_SY := 236.0     # カンダタを置く高さ
 const PPM := 3.5             # 1m あたりのドット
+const LAVA_OFF := 16.0       # マグマの表面の描画位置（0m のとき、ちょうど地表にそろう）
 const XS := 0.7              # モデルの横位置（px@1280）→ 画面ドット
 const GHOST_GAP := 12.0
 const MAP_X := 625.0         # 高度マップ（縦の再生バー）
@@ -879,7 +880,7 @@ func _process(delta: float) -> void:
 			_se("se_hit_rock", 1.3, -6.0)
 			_drop_ghosts(n, model.height - 3.0, model.x)
 		if model.ghosts_burned > burned_before:   # 業火に焼かれた罪人
-			_burst(Vector2(_sx(model.x), _sy(model.lava_h)), 18, [C_YELLOW, C_ORANGE, C_RED], 70.0, 2.0, 0.6, -60.0)
+			_burst(Vector2(_sx(model.x), _sy(model.lava_h) + LAVA_OFF), 18, [C_YELLOW, C_ORANGE, C_RED], 70.0, 2.0, 0.6, -60.0)
 			_se("se_burn")
 		prev_state = model.state
 		if model.state == ThreadModel.State.WON or model.state == ThreadModel.State.TORN:
@@ -1233,8 +1234,8 @@ func _update_particles(delta: float) -> void:
 					0.6, Color(C_WHITE, 0.8), 1.0, 40.0, 1.0)
 	# 蹴落とされた罪人の赤い尾
 	# 業火の火の粉
-	var lt := _sy(model.lava_h)
-	if lt < H + 4.0 and model.lava_h >= 0.0:
+	var lt := _sy(model.lava_h) + LAVA_OFF
+	if lt < H + 4.0 and model.lava_h >= -1.0:
 		if randf() < 0.12:   # 跳ねるしぶき
 			var sx3 := randf() * FIELD_W
 			for k in range(6):
@@ -1714,16 +1715,16 @@ const C_CLIFF_L := Color8(92, 66, 60)
 
 func _draw_lava() -> void:
 	# 下から迫るマグマ。地面より下にいるうちは、地面の割れ目から光が漏れるだけ
-	var top := _sy(model.lava_h)
+	# 地面の下にいるうちは、土の断面の中をゆっくりせり上がってくる（地表に届くと、あふれ出す）
+	var top := _sy(model.lava_h) + LAVA_OFF
 	var ground_y := _sy(0.0) + 16.0
-	if model.lava_h < 0.0:
-		if ground_y < H:
-			var glow := clampf(1.0 - (-model.lava_h) / 40.0, 0.0, 1.0)
-			for i in range(0, int(FIELD_W), 23):
-				var cy := ground_y + 6.0 + float((i * 7) % 20)
-				if cy < H:
-					draw_rect(Rect2(i, cy, 8 + (i % 3) * 3, 1), Color(C_ORANGE, 0.25 + 0.6 * glow * (0.6 + 0.4 * sin(t * 4.0 + i))))
-		return
+	if model.lava_h < 0.0 and ground_y < H:
+		# 近づくほど、地面の割れ目が明るく光る
+		var glow := clampf(1.0 - (-model.lava_h) / 30.0, 0.0, 1.0)
+		for i in range(0, int(FIELD_W), 23):
+			var cy := ground_y + 6.0 + float((i * 7) % 20)
+			if cy < minf(H, top):
+				draw_rect(Rect2(i, cy, 8 + (i % 3) * 3, 1), Color(C_ORANGE, 0.2 + 0.6 * glow * (0.6 + 0.4 * sin(t * 4.0 + i))))
 	if top > H + 8.0:
 		return
 	# 熱気: 上へ行くほど薄くなる橙の層（ゆらゆら）

@@ -149,7 +149,7 @@ var blasted := 0              # 叫びで消した障害の合計
 var last_clutch := false      # 直前の叫びが九死に一生だったか
 var clutches := 0             # 九死に一生の回数
 var thread_end := -30.0       # 手元から下へ垂れている糸の下端（m）。叫んで切ると、つかみ直した所が下端になる
-var lava_h := -45.0           # 下から迫る業火の高さ（m）
+var lava_h := -36.0           # 下から迫る業火の高さ（m）
 var gen_fire_h := 35.0        # 次に鬼火を置く高さ
 var gen_perch_h := 12.0       # 次に罪人を置く高さ
 var gen_last_lane := -1
@@ -182,7 +182,7 @@ func _generate(seed_value: int) -> void:
 	gen_fire_h = 35.0
 	gen_perch_h = 12.0
 	gen_last_lane = -1
-	lava_h = -45.0
+	lava_h = -36.0
 	rock_timer = 2.5   # 最初の岩までの猶予
 	_generate_ahead()
 
@@ -210,7 +210,8 @@ func _generate_ahead() -> void:
 
 
 func lava_speed() -> float:
-	return cfg.lava_speed + cfg.lava_accel * elapsed
+	# 出だしはゆっくり動き出す（3秒かけて本来の速さへ）。地面に届く時刻は前と同じくらい
+	return (cfg.lava_speed + cfg.lava_accel * elapsed) * clampf(elapsed / 3.0, 0.0, 1.0)
 
 
 func fire_pos(o: Dictionary) -> Vector2:

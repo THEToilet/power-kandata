@@ -64,6 +64,8 @@ func _process(_d: float) -> void:
 			m.lava_h = minf(m.lava_h, m.height - 60.0)
 		var inp: Array = Bot.bot_inputs(m, margin, "n2", "smart", 30)
 		if OS.get_cmdline_user_args().has("snap") and m.durability <= 0.0: inp[1] = false
+		if OS.get_cmdline_user_args().has("idle") and m.elapsed < 9.0:   # 出だしで止まって、マグマの上がり方を見る
+			inp = [false, false, 0.0, false]
 		main.bot_climb = inp[0]
 		main.bot_shout = inp[1]
 		main.bot_swing = inp[2]
@@ -71,7 +73,7 @@ func _process(_d: float) -> void:
 		if m.height > 280.0 and not shots.has("goal"):
 			shots["goal"] = true
 			_snap("goal")
-		for ts in [3.0, 9.0, 16.0, 24.0]:
+		for ts in [1.0, 3.0, 5.0, 6.0, 7.0, 7.6, 9.0, 16.0, 24.0]:
 			var key := "t%02d" % int(ts)
 			if m.elapsed >= ts and not shots.has(key):
 				shots[key] = true
