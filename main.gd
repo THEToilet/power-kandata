@@ -354,6 +354,12 @@ var shake := 0.0
 var fall_t := 0.0
 var torn_x := 0.0               # 糸が切れた位置（上の糸が跳ね上がる起点）
 const GAMEOVER_DELAY := 1.4     # 落ちていく様子を見せてから GAME OVER を出すまで（秒）
+# クリア後: 極楽の景色 → ランキングの枠 → 1位から順に1行ずつ → 全部出たらリトライできる
+const WIN_RANK_AT := 2.6        # ランキングの枠が出はじめる（秒）
+const WIN_ROW_AT := 3.1         # 1位の行が出る
+const WIN_ROW_STEP := 0.12      # 1行ずつの間隔
+const WIN_READY := WIN_ROW_AT + WIN_ROW_STEP * 10 + 0.5   # これより前はリトライ不可
+var go_jingled := false
 var panel_open := false
 var panel_sel := 0
 var draw_off := Vector2.ZERO     # 画面揺れのオフセット（文字の拡大描画で使う）
@@ -367,6 +373,7 @@ var bot_dash := false
 
 
 func _ready() -> void:
+	_setup_audio()
 	_setup_invert()
 	_setup_ripple()
 	get_window().title = "パワーカンダタ"   # 記録の保存先が変わらないよう、プロジェクト名は変えずにウィンドウの題だけ変える
@@ -492,8 +499,147 @@ func _restart() -> void:
 	fx_hit = 0.0
 	shake = 0.0
 	fall_t = 0.0
+	go_jingled = false
 	phase = Phase.PLAY
 	phase_t = 0.0
+
+
+# ---------------------------------------------------------------- 音（audio/ の中身は tools/make_audio.py で作り直せる）
+
+const SND_NAMES := ["bgm_title", "bgm_play", "bgm_heaven", "jingle_clear", "jingle_gameover",
+		"se_shout", "se_shout_clutch", "se_kick", "se_catch", "se_grab", "se_snap", "se_fall",
+		"se_hit_fire", "se_hit_rock", "se_burn", "se_throw", "se_warn", "se_leap", "se_start",
+		"se_tick", "se_rank_new", "se_nope", "se_heart", "se_rumble"]
+const SND_LOOP := ["bgm_title", "bgm_play", "bgm_heaven", "se_rumble"]
+# 音ごとの音量（dB）。うるさい・小さいと感じたらここをいじる
+const SND_VOL := {
+	"bgm_title": -8.0, "bgm_play": -10.0, "bgm_heaven": -9.0, "jingle_clear": -5.0, "jingle_gameover": -5.0,
+	"se_shout": -2.0, "se_shout_clutch": 0.0, "se_kick": -9.0, "se_catch": -5.0, "se_grab": -9.0,
+	"se_snap": -1.0, "se_fall": -7.0, "se_hit_fire": -3.0, "se_hit_rock": -4.0, "se_burn": -8.0,
+	"se_throw": -10.0, "se_warn": -11.0, "se_leap": -16.0, "se_start": -5.0, "se_tick": -12.0,
+	"se_rank_new": -4.0, "se_nope": -10.0, "se_heart": -3.0,
+}
+var snd := {}
+var bgm_player: AudioStreamPlayer
+var rumble_player: AudioStreamPlayer
+var se_players: Array = []
+var se_next := 0
+var bgm_name := ""
+var heart_prev := 0.0
+var se_log := {}   # 鳴らした回数（検証用）
+
+
+func _setup_audio() -> void:
+	for n in SND_NAMES:
+		var path: String = "res://audio/" + n + ".wav"
+		var st = null
+		if ResourceLoader.exists(path):
+			st = load(path)
+		elif FileAccess.file_exists(path):   # エディタで一度も開いていない（未インポート）ときは wav を直接読む
+			st = AudioStreamWAV.load_from_file(ProjectSettings.globalize_path(path))
+		if st == null:
+			continue
+		if st is AudioStreamWAV and n in SND_LOOP:
+			st.loop_mode = AudioStreamWAV.LOOP_FORWARD
+			st.loop_begin = 0
+			st.loop_end = int(round(st.get_length() * st.mix_rate))
+		snd[n] = st
+	bgm_player = AudioStreamPlayer.new()
+	add_child(bgm_player)
+	rumble_player = AudioStreamPlayer.new()
+	add_child(rumble_player)
+	if snd.has("se_rumble"):
+		rumble_player.stream = snd["se_rumble"]
+	for i in range(12):
+		var p := AudioStreamPlayer.new()
+		add_child(p)
+		se_players.append(p)
+
+
+func _se(n: String, pitch := 1.0, vol := 0.0) -> void:
+	if not snd.has(n) or se_players.is_empty():
+		return
+	se_log[n] = int(se_log.get(n, 0)) + 1
+	var p: AudioStreamPlayer = se_players[se_next]
+	se_next = (se_next + 1) % se_players.size()
+	p.stream = snd[n]
+	p.pitch_scale = pitch
+	p.volume_db = float(SND_VOL.get(n, 0.0)) + vol
+	p.play()
+
+
+func _bgm(n: String) -> void:
+	if bgm_name == n or bgm_player == null:
+		return
+	bgm_name = n
+	bgm_player.stop()
+	if snd.has(n):
+		bgm_player.stream = snd[n]
+		bgm_player.volume_db = float(SND_VOL.get(n, 0.0))
+		bgm_player.play()
+
+
+func _update_audio(delta: float) -> void:
+	# 場面ごとの曲
+	if phase == Phase.TITLE:
+		_bgm("bgm_title")
+	elif phase == Phase.PLAY:
+		_bgm("bgm_play")
+	elif model.state == ThreadModel.State.WON:
+		if bgm_name == "jingle_clear" and not bgm_player.playing:
+			_bgm("bgm_heaven")   # ファンファーレが終わったら、極楽の曲
+	elif not go_jingled and phase_t > GAMEOVER_DELAY:
+		go_jingled = true
+		_bgm("jingle_gameover")
+	# マグマが近いほど地鳴りが大きくなる
+	var near := 0.0
+	if phase == Phase.PLAY and model.lava_h > 0.0:
+		near = clampf(1.0 - (model.height - model.lava_h) / 40.0, 0.0, 1.0)
+	if near > 0.01 and rumble_player.stream:
+		if not rumble_player.playing:
+			rumble_player.play()
+		rumble_player.volume_db = lerpf(-30.0, -3.0, near)
+	elif rumble_player.playing:
+		rumble_player.stop()
+	if phase != Phase.PLAY:
+		return
+	# 九死に一生の圏内: 画面の鼓動に合わせて、心臓の音
+	if model.is_clutch() and model.can_shout():
+		var hp := fmod(t, 0.8)
+		if hp < heart_prev:
+			_se("se_heart")
+		elif heart_prev < 0.18 and hp >= 0.18:
+			_se("se_heart", 1.0, -4.0)
+		heart_prev = hp
+	else:
+		heart_prev = 0.79
+	# 鬼が岩を構えたら「！」、投げたら風切り音（画面内のものだけ）
+	for rk in model.rocks:
+		var ry: float = _sy(rk.h)
+		var on := ry > -20.0 and ry < H + 20.0
+		if rk.state == 0 and on and not rk.has("_sw"):
+			rk["_sw"] = true
+			_se("se_warn")
+		if rk.state == 1 and not rk.has("_st"):
+			rk["_st"] = true
+			if on:
+				_se("se_throw", randf_range(0.9, 1.1))
+	# 罪人が崖から跳んだ
+	for j in model.jumpers:
+		if not j.has("_sl"):
+			j["_sl"] = true
+			var jy: float = _sy(j.h0)
+			if jy > -20.0 and jy < H + 20.0:
+				_se("se_leap", randf_range(0.85, 1.2))
+
+
+func _result_ready() -> bool:
+	# 演出の途中ではリトライさせない（糸切れ: GAME OVER が出るまで / クリア: ランキングが出そろうまで）
+	if phase != Phase.RESULT:
+		return true
+	if model.state == ThreadModel.State.TORN:
+		return phase_t > GAMEOVER_DELAY + 0.6
+	return phase_t > WIN_READY
 
 
 # ---------------------------------------------------------------- 調整値の保存
@@ -594,10 +740,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if k == KEY_F1 or k == KEY_TAB:
 		panel_open = true
+	elif k == KEY_M:   # 音のオン・オフ
+		AudioServer.set_bus_mute(0, not AudioServer.is_bus_mute(0))
 	elif phase == Phase.TITLE and (k == KEY_SPACE or k == KEY_ENTER):
+		_se("se_start")
 		_restart()
-	elif phase == Phase.RESULT and phase_t > (GAMEOVER_DELAY + 0.6 if model.state == ThreadModel.State.TORN else 0.9) and (k == KEY_SPACE or k == KEY_ENTER):
+	elif phase == Phase.RESULT and not _result_ready():
+		return   # 演出中は R も N もスペースも受け付けない
+	elif phase == Phase.RESULT and (k == KEY_SPACE or k == KEY_ENTER):
 		course = randi_range(1, 999)   # 毎回ちがう地獄
+		_se("se_start")
 		_restart()
 	elif k == KEY_R and phase != Phase.TITLE:
 		_restart()
@@ -637,6 +789,7 @@ func _process(delta: float) -> void:
 	if panel_open:
 		queue_redraw()
 		return
+	_update_audio(delta)
 	shout_age += delta
 	invert_t = maxf(0.0, invert_t - delta)
 	_update_ripple()
@@ -653,7 +806,16 @@ func _process(delta: float) -> void:
 		slowmo -= delta
 		delta *= 0.35
 	t += delta
+	var pt_before := phase_t
 	phase_t += delta
+	if phase == Phase.RESULT and model.state == ThreadModel.State.WON:
+		for i in range(RANKING_SIZE):
+			var rt := WIN_ROW_AT + WIN_ROW_STEP * i
+			if pt_before < rt and phase_t >= rt:
+				if i == new_rank:
+					_se("se_rank_new")
+				else:
+					_se("se_tick", 1.0 + 0.04 * i)
 	fx_shout = maxf(0.0, fx_shout - delta)
 	stomp_fx = maxf(0.0, stomp_fx - delta)
 	fx_hit = maxf(0.0, fx_hit - delta)
@@ -680,6 +842,7 @@ func _process(delta: float) -> void:
 		if shout and model.state == ThreadModel.State.CLIMBING and not model.can_shout() and early_t <= 0.0:
 			early_t = 0.6
 			ring_nope = 0.4   # 踏み台がいないときは、○ゲージが首を振るだけ
+			_se("se_nope")
 		var shouts_before := model.shouts
 		var hits_before := model.hits
 		var rocks_before := model.rock_hits
@@ -695,11 +858,14 @@ func _process(delta: float) -> void:
 		if prev_state == ThreadModel.State.AIR and model.state == ThreadModel.State.CLIMBING:
 			# 上の糸をつかんだ瞬間の火花
 			_burst(Vector2(_sx(model.x), _player_sy() - 15.0), 14, [C_YELLOW, C_WHITE], 60.0, 1.0, 0.4, 0.0)
+			_se("se_grab")
 		if model.hits > hits_before:
 			_burst(Vector2(_sx(model.x), _player_sy()), 30, [C_ORANGE, C_YELLOW, C_RED], 110.0, 2.0, 0.6, 60.0)
 			fx_hit = 0.5
 			shake = 0.9
+			_se("se_hit_fire")
 		if model.rock_hits > rocks_before:
+			_se("se_hit_rock")
 			_burst(Vector2(_sx(model.x), _player_sy() - 10.0), 22, [C_ROCK, C_ROCK_L, C_ROCK_D], 120.0, 2.0, 0.8, 300.0)
 			_burst(Vector2(_sx(model.x), _player_sy() - 10.0), 12, [Color(C_GREY, 0.6)], 40.0, 3.0, 0.7, -20.0)
 			fx_hit = 0.5
@@ -707,11 +873,14 @@ func _process(delta: float) -> void:
 		if model.caught > caught_before:
 			_burst(Vector2(_sx(model.x), _player_sy() + 40.0), 14, [Color(C_GREY, 0.7), Color(C_CLIFF_L, 0.8)], 50.0, 2.0, 0.5, 40.0)
 			shake = maxf(shake, 0.4)
+			_se("se_catch", randf_range(0.92, 1.08))
 		if model.ghosts_crushed > crushed_before:
 			var n := model.ghosts_crushed - crushed_before
+			_se("se_hit_rock", 1.3, -6.0)
 			_drop_ghosts(n, model.height - 3.0, model.x)
 		if model.ghosts_burned > burned_before:   # 業火に焼かれた罪人
 			_burst(Vector2(_sx(model.x), _sy(model.lava_h)), 18, [C_YELLOW, C_ORANGE, C_RED], 70.0, 2.0, 0.6, -60.0)
+			_se("se_burn")
 		prev_state = model.state
 		if model.state == ThreadModel.State.WON or model.state == ThreadModel.State.TORN:
 			new_rank = -1
@@ -722,6 +891,7 @@ func _process(delta: float) -> void:
 					best_time[difficulty] = model.elapsed
 				best[difficulty] = int(ThreadModel.GOAL)
 				_save_records()
+				_bgm("jingle_clear")
 			if model.state == ThreadModel.State.TORN:
 				new_record = int(model.height) > best[difficulty]
 				if new_record:
@@ -734,6 +904,11 @@ func _process(delta: float) -> void:
 				hitstop_frames = 0
 				shout_age = 99.0
 				torn_x = model.x
+				_bgm("")   # 曲が止まって、ブチッ → ひゅーっと落ちる
+				_se("se_snap")
+				_se("se_fall")
+				if model.death == "lava":
+					_se("se_burn", 0.8, 4.0)
 				falling_thread.append([h_before, model.x, 0.0])
 				_drop_ghosts(int(model.ghosts), model.height, model.x, false, true)
 			phase = Phase.RESULT
@@ -770,6 +945,7 @@ func _process(delta: float) -> void:
 			f[4] -= delta
 			if f[4] <= 0.0:
 				_burst(f[0], 8, [C_WHITE, C_YELLOW], 90.0, 2.0, 0.3, 0.0)
+				_se("se_kick", 1.0 + 0.12 * float(f[3]))   # 連鎖するほど音が上がる
 				shake = maxf(shake, 0.35)
 			continue
 		f[1].y += (230.0 if phase == Phase.RESULT and model.state == ThreadModel.State.TORN else 550.0) * delta   # 糸切れ時はゆっくり見せる
@@ -832,6 +1008,7 @@ func _save_records() -> void:
 func _on_shout(n_ghosts: int, from_x: float) -> void:
 	var sp := Vector2(_sx(from_x), _sy(model.air_from))
 	var big := clampi(model.last_stones, 1, 6)
+	_se("se_shout_clutch" if model.last_clutch else "se_shout", 1.0 - 0.03 * big)
 	_burst(sp, 20 + big * 10, [C_YELLOW, C_WHITE, C_ORANGE], 90.0 + big * 20.0, 2.0, 0.7, 0.0)   # 叫びの火花
 	# 衝撃波で消し飛んだ岩と鬼火
 	for b in model.last_blast:
@@ -1185,7 +1362,7 @@ func _draw() -> void:
 	var won := phase == Phase.RESULT and model.state == ThreadModel.State.WON
 	if won and phase_t > 0.35:
 		_draw_meadow()   # 極楽に着いたら、景色ごと切り替える
-		if phase_t > 1.8:
+		if phase_t > WIN_RANK_AT:
 			_draw_result()
 	else:
 		# 叫んだ瞬間、カメラがぐっと寄ってから戻る（止まっている間は寄ったまま）
@@ -2053,7 +2230,7 @@ func _rank(sec: float) -> String:
 func _draw_result() -> void:
 	if model.state == ThreadModel.State.WON:
 		# 景色を隠さないよう、上に小さく
-		var a := clampf((phase_t - 1.8) / 0.5, 0.0, 1.0)
+		var a := clampf((phase_t - WIN_RANK_AT) / 0.4, 0.0, 1.0)
 		var wx := W * 0.5
 		draw_rect(Rect2(wx - 170, 24, 340, 204), Color(C_BLACK, 0.6 * a))
 		_label(Vector2(wx, 58), "極楽に到達！", 32, Color(C_YELLOW, a), HORIZONTAL_ALIGNMENT_CENTER)
@@ -2064,6 +2241,8 @@ func _draw_result() -> void:
 		# 1行 = 「順位」「タイム（秒・右そろえ）」「日付（薄く）」。左の列に1〜5位、右の列に6〜10位
 		draw_rect(Rect2(wx, 122, 1, 92), Color(C_WHITE, 0.25 * a))   # 列の仕切り
 		for i in range(RANKING_SIZE):
+			if phase_t < WIN_ROW_AT + WIN_ROW_STEP * i:
+				break   # 1位から順に1行ずつ出す
 			var col_x := wx - 150.0 if i < 5 else wx + 10.0
 			var row_y := 136.0 + float(i % 5) * 18.0
 			var is_new := i == new_rank
@@ -2079,7 +2258,7 @@ func _draw_result() -> void:
 				_label(Vector2(col_x + 102.0, row_y), str(lst[i]["d"]), 16, Color(C_WHITE, 0.45 * a))   # 表示は月/日だけ（年は保存のみ）
 			else:
 				_label(Vector2(col_x + 92.0, row_y), "―", 16, Color(C_WHITE, 0.3 * a), HORIZONTAL_ALIGNMENT_RIGHT)
-		if fmod(t, 1.0) < 0.6 and a >= 1.0:
+		if fmod(t, 1.0) < 0.6 and _result_ready():
 			_label(Vector2(wx, 346), "PUSH START", 16, C_WHITE, HORIZONTAL_ALIGNMENT_CENTER)
 		return
 	var ga := clampf((phase_t - GAMEOVER_DELAY) / 0.4, 0.0, 1.0)   # ゆっくり暗くなる

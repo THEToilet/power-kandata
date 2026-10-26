@@ -60,6 +60,8 @@ func _process(_d: float) -> void:
 	if main.phase == main.Phase.PLAY and not main.panel_open:
 		if OS.get_cmdline_user_args().has("snap") and m.elapsed > 10.0 and m.ghosts >= 1.0 and m.state == ThreadModel.State.CLIMBING:
 			m.durability = 0.0   # 糸切れ演出の確認用
+		if OS.get_cmdline_user_args().has("nolava"):   # クリア演出の確認用: マグマを遠ざける
+			m.lava_h = minf(m.lava_h, m.height - 60.0)
 		var inp: Array = Bot.bot_inputs(m, margin, "n2", "smart", 30)
 		if OS.get_cmdline_user_args().has("snap") and m.durability <= 0.0: inp[1] = false
 		main.bot_climb = inp[0]
@@ -160,7 +162,7 @@ func _process(_d: float) -> void:
 			shots["shout"] = true
 			_snap("shout")
 	if main.phase == main.Phase.RESULT and m.state == m.State.WON:
-		for pt in [0.3, 1.0, 2.6]:
+		for pt in [0.3, 1.0, 2.6, 3.0, 3.6, 4.4]:
 			var key := "win_%.1f" % pt
 			if main.phase_t >= pt and not shots.has(key):
 				shots[key] = true
@@ -171,9 +173,10 @@ func _process(_d: float) -> void:
 			if main.phase_t >= pt and not shots.has(key):
 				shots[key] = true
 				_snap(key)
-	if main.phase == main.Phase.RESULT and main.phase_t > 2.8:
+	if main.phase == main.Phase.RESULT and main.phase_t > (main.WIN_READY + 0.4 if m.state == m.State.WON else 2.8):
 		_snap("result")
 		print("RESULT ", m.State.keys()[m.state], " t=", snapped(m.elapsed, 0.1), " h=", int(m.height), " shouts=", m.shouts, " hits=", m.hits)
+		print("SOUND loaded=", main.snd.size(), " bgm=", main.bgm_name, " se=", main.se_log)
 		get_tree().quit()
 	if frame > 60 * 150:
 		get_tree().quit()
