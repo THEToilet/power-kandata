@@ -126,6 +126,15 @@ func _process(_d: float) -> void:
 		if main.fx_shout > 0.0 and main.fx_shout < 0.4 and m.elapsed > 4.0 and not shots.has("shout_late"):
 			shots["shout_late"] = true
 			_snap("shout_late")
+		if main.shout_age > 0.12 and main.shout_age < 0.16 and m.elapsed > 4.0 and not shots.has("punch"):
+			shots["punch"] = true
+			_snap("punch")
+		if main.shout_clutch and main.hitstop > 0.0 and main.hitstop_frames == 2 and not shots.has("clutch_stop"):
+			shots["clutch_stop"] = true
+			_snap("clutch_stop")
+		if main.shout_clutch and main.slowmo > 0.1 and main.slowmo < 0.25 and not shots.has("clutch_slow"):
+			shots["clutch_slow"] = true
+			_snap("clutch_slow")
 		if main.hitstop > 0.0 and main.hitstop_frames == 1 and m.elapsed > 4.0 and not shots.has("hitstop"):
 			shots["hitstop"] = true
 			_snap("hitstop")

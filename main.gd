@@ -316,6 +316,12 @@ var falling_ghosts: Array = []   # [pos, vel, rot]
 var falling_thread: Array = []   # [world_h, x, age]
 var popups: Array = []           # [text, world_h, x, age, color]
 var fx_shout := 0.0
+var shout_age := 99.0            # 叫んでからの実時間（ヒットストップ中も進む。文字の打ち込みや集中線に使う）
+var shout_clutch := false        # 直前の叫びが九死に一生か
+var hitstop_total := 0.0         # 直前のヒットストップの長さ
+var slowmo := 0.0                # スローモーションの残り（九死に一生）
+var invert_t := 0.0              # 白黒反転の残り（九死に一生の瞬間）
+var invert_rect: ColorRect
 var shout_hold := 0.0            # 叫んだ直後にカメラを留める残り時間
 var hitstop := 0.0               # ヒットストップの残り時間（秒）
 var hitstop_frames := 0          # ヒットストップに入ってからのフレーム数（最初の数フレームだけ光らせる）
@@ -356,6 +362,7 @@ var bot_dash := false
 
 
 func _ready() -> void:
+	_setup_invert()
 	get_window().title = "パワーカンダタ"   # 記録の保存先が変わらないよう、プロジェクト名は変えずにウィンドウの題だけ変える
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	var f := FontFile.new()
@@ -387,6 +394,23 @@ func _ready() -> void:
 	_new_model()
 
 
+func _setup_invert() -> void:
+	# 画面の白黒反転（九死に一生の瞬間だけ表示）
+	var layer := CanvasLayer.new()
+	layer.layer = 50
+	invert_rect = ColorRect.new()
+	invert_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	invert_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sh := Shader.new()
+	sh.code = "shader_type canvas_item;\nuniform sampler2D screen_tex : hint_screen_texture, filter_nearest;\nvoid fragment() { vec3 c = texture(screen_tex, SCREEN_UV).rgb; COLOR = vec4(vec3(1.0) - c, 1.0); }"
+	var mat := ShaderMaterial.new()
+	mat.shader = sh
+	invert_rect.material = mat
+	invert_rect.visible = false
+	layer.add_child(invert_rect)
+	add_child(layer)
+
+
 func _new_model() -> void:
 	model = ThreadModel.new()
 	# 調整パネルで標準から変えた値だけを、難易度の上に重ねる
@@ -407,6 +431,9 @@ func _restart() -> void:
 	tip_queue.clear()
 	tip_text = ""
 	fx_shout = 0.0
+	slowmo = 0.0
+	invert_t = 0.0
+	shout_age = 99.0
 	fx_hit = 0.0
 	shake = 0.0
 	fall_t = 0.0
@@ -555,12 +582,20 @@ func _process(delta: float) -> void:
 	if panel_open:
 		queue_redraw()
 		return
+	shout_age += delta
+	invert_t = maxf(0.0, invert_t - delta)
+	if invert_rect:
+		invert_rect.visible = invert_t > 0.0
 	# ヒットストップ: 叫んだ瞬間、世界を一瞬止める（揺れだけは続ける）
 	if hitstop > 0.0:
 		hitstop -= delta
 		hitstop_frames += 1
 		queue_redraw()
 		return
+	# 九死に一生のあとは、跳び上がりをゆっくり見せる
+	if slowmo > 0.0:
+		slowmo -= delta
+		delta *= 0.35
 	t += delta
 	phase_t += delta
 	fx_shout = maxf(0.0, fx_shout - delta)
@@ -670,6 +705,12 @@ func _process(delta: float) -> void:
 		_update_tips(delta)
 
 	for f in falling_ghosts:
+		if f.size() > 4 and f[4] > 0.0:   # 踏み台の連鎖: 上から順に光ってから弾かれる
+			f[4] -= delta
+			if f[4] <= 0.0:
+				_burst(f[0], 8, [C_WHITE, C_YELLOW], 90.0, 2.0, 0.3, 0.0)
+				shake = maxf(shake, 0.35)
+			continue
 		f[1].y += 550.0 * delta
 		f[0] += f[1] * delta
 		f[2] += delta * 6.0
@@ -738,26 +779,79 @@ func _on_shout(n_ghosts: int, from_x: float) -> void:
 			_burst(bp, 24, [C_YELLOW, C_ORANGE, C_WHITE], 120.0, 2.0, 0.6, -30.0)
 		else:
 			_burst(bp, 20, [C_ROCK, C_ROCK_L, C_ROCK_D], 150.0, 3.0, 0.7, 250.0)
-	fx_shout = 0.9
+	fx_shout = 1.1
 	shout_text = SHOUT_LINES[randi() % SHOUT_LINES.size()]
-	shake = minf(1.4, 0.5 + 0.12 * model.last_stones)   # 大勢を踏み台にするほど揺れる
+	shake = minf(1.8, 0.8 + 0.14 * model.last_stones)   # 大勢を踏み台にするほど揺れる
+	shout_age = 0.0
+	shout_clutch = model.last_clutch
+	# 糸が切れる瞬間: 足もとの切り口に火花
+	_burst(sp + Vector2(0, 18), 18, [C_WHITE, C_YELLOW, C_ORANGE], 110.0, 2.0, 0.45, 120.0)
 	if model.last_stones >= 5:
 		_burst(sp, 40, [C_WHITE, C_CYAN], 220.0, 3.0, 0.9, 0.0)   # 大跳躍の衝撃波
 	if model.last_clutch:
 		shake = 1.5
 		_burst(sp, 60, [C_GOLD, C_YELLOW, C_WHITE], 200.0, 3.0, 1.1, -20.0)
-		popups.append(["九死に一生！", model.air_from + 16.0, from_x - 80.0, 0.0, C_GOLD])
+		shake = 2.0
+		invert_t = 0.07      # 一瞬だけ白黒反転
+		slowmo = 0.4         # 跳び上がりをスローで
 	falling_thread.append([model.air_from, from_x, 0.0])
 	_drop_ghosts(n_ghosts, model.air_from, from_x, true)
 	stomp_fx = BLAST_TIME
 	# ヒットストップ: 踏み台が多いほど長く止まる。九死に一生はさらに長く
 	hitstop = minf(0.06 + 0.02 * model.last_stones, 0.16)
 	if model.last_clutch:
-		hitstop = 0.24
+		hitstop = 0.26
 	hitstop_frames = 0
+	hitstop_total = hitstop
 	shout_hold = 0.3
 	blast_at = Vector2(from_x, model.air_from)
 	blast_px = model.blast_r
+
+
+func _draw_speed_lines(c: Vector2) -> void:
+	# 集中線: カンダタに向かって、画面の外から細い三角の線が刺さる。止まっている間は濃く、そのあと消える
+	var fade := 1.0 if shout_age < hitstop_total else maxf(0.0, 1.0 - (shout_age - hitstop_total) / 0.25)
+	var col: Color = C_GOLD if shout_clutch else C_WHITE
+	var n := 56 if shout_clutch else 44
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(shout_age * 30.0)   # 数フレームごとに線が入れ替わってチラつく
+	for i in range(n):
+		var a := TAU * (i + rng.randf() * 0.6) / n
+		var dir := Vector2(cos(a), sin(a))
+		var r_in := 46.0 + rng.randf() * 60.0
+		var r_out := 520.0
+		var wdt := 1.0 + rng.randf() * 3.0
+		var side := Vector2(-dir.y, dir.x) * wdt
+		draw_colored_polygon(PackedVector2Array([c + dir * r_out + side, c + dir * r_out - side, c + dir * r_in]),
+				Color(col, (0.55 + rng.randf() * 0.35) * fade))
+
+
+func _draw_shout_text(px: float, py: float) -> void:
+	# 叫びの文字を一文字ずつ叩きつける: 大きく出て、ぐっと縮んで止まる。黒いふちと赤い影
+	var sc_final := 2.0
+	var full_w := font.get_string_size(shout_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x * sc_final
+	var sx := minf(px + 24.0, FIELD_W - full_w - 6.0)
+	if sx < px + 24.0 and px - 24.0 - full_w > 6.0:
+		sx = px - 24.0 - full_w
+	var sy := clampf(py - 10.0, 40.0, H - 40.0)
+	var alpha := minf(1.0, fx_shout * 2.5)
+	var body: Color = C_GOLD if shout_clutch else C_YELLOW
+	var x := sx
+	for i in range(shout_text.length()):
+		var ch := shout_text.substr(i, 1)
+		var cw := font.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
+		var k := clampf((shout_age - i * 0.045) / 0.09, 0.0, 1.0)
+		if k > 0.0:
+			var sc := lerpf(4.0, sc_final, 1.0 - pow(1.0 - k, 3.0))   # 大きく出て縮む
+			var center := Vector2(x + cw * sc_final * 0.5, sy - 8.0 * sc_final * 0.5) + draw_off
+			var p := (center / sc - Vector2(cw * 0.5, -6.0)).round()
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2(sc, sc))
+			draw_string(font, p + Vector2(1, 1), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(C_BLOOD, alpha))
+			for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:
+				draw_string(font, p + o, ch, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(C_BLACK, alpha))
+			draw_string(font, p, ch, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(body if k >= 1.0 else C_WHITE, alpha))
+			draw_set_transform(draw_off)
+		x += cw * sc_final
 
 
 func _drop_ghosts(n_ghosts: int, from_h: float, from_x: float, kicked := false) -> void:
@@ -770,7 +864,7 @@ func _drop_ghosts(n_ghosts: int, from_h: float, from_x: float, kicked := false) 
 		var v := Vector2(randf_range(-110, 110), randf_range(-130, -30))
 		if kicked:
 			v = Vector2(randf_range(-40, 40), randf_range(160, 260))
-		falling_ghosts.append([Vector2(_gx(from_x, i) + (8.0 if i % 2 == 0 else -8.0), gy), v, 0.0, i])
+		falling_ghosts.append([Vector2(_gx(from_x, i) + (8.0 if i % 2 == 0 else -8.0), gy), v, 0.0, i, (0.05 + i * 0.05) if kicked else 0.0])
 
 
 # ---------------------------------------------------------------- パーティクル
@@ -919,7 +1013,7 @@ func _update_tips(delta: float) -> void:
 	if model.height - model.lava_h < 35.0 and model.elapsed > 3.0:
 		_tip("lava", "下から業火が迫る！ 溜めて大きく跳べ")
 	if model.is_clutch() and model.can_shout():
-		_tip("clutch", "切れる寸前の叫びは、九死に一生の大跳躍！")
+		pass   # 九死に一生は文字では案内しない（演出で見せる）
 	if tip_text != "":
 		tip_t += delta
 		if tip_t >= TIP_TIME:
@@ -936,7 +1030,7 @@ func _hint() -> Array:
 		return ["よろけて登れない…", C_ORANGE]
 	var snap := model.time_to_snap(true, model.dashing)
 	if model.is_clutch() and model.can_shout():
-		return ["九死に一生！ 今叫べば×%s" % _fmt(model.cfg.clutch_mult), C_GOLD]
+		return ["", C_GOLD]
 	if snap < 1.5:
 		if model.can_shout():
 			return ["糸が切れる！ SPACEで叫べ！", C_RED]
@@ -1193,6 +1287,8 @@ func _draw_world() -> void:
 	var thread_top := Vector2(THREAD_X, maxf(goal_y - 52.0, -4.0))   # 蜘蛛から垂れる
 	# 糸の色は上下で同じ。傷むほど少しずつ赤みが差し、切れそうになると赤く点滅
 	var tc := C_SILK
+	if slowmo > 0.0:
+		tc = C_GOLD   # 九死に一生のあと、糸が金に光る
 	if model.state == ThreadModel.State.CLIMBING:
 		tc = C_SILK.lerp(C_RED, (1.0 - model.durability / ThreadModel.DURABILITY_MAX) * 0.7)
 		if model.time_to_snap(true, false) < 1.3 and fmod(t, 0.3) < 0.15:
@@ -1236,14 +1332,24 @@ func _draw_world() -> void:
 		_draw_ring(ring_c, snap)
 
 	# ちぎれて落ちていく糸
-	for th in falling_thread:
+	for th in falling_thread:   # 切れた糸: 鞭のようにしなりながら落ちていく
 		var age: float = th[2]
-		var ty: float = _sy(th[0]) + roundf(age * age * 450.0)
+		var ty: float = _sy(th[0]) + 16.0 + roundf(age * age * 450.0)
 		var tx: float = _sx(th[1])
-		draw_line(Vector2(tx, ty), Vector2(tx + roundf(5.0 * age), ty + 350.0), Color(C_RED, maxf(0.0, 1.0 - age * 0.6)), 1.0)
+		var amp := 14.0 * maxf(0.0, 1.0 - age * 1.2)
+		var tcol: Color = (C_GOLD if shout_clutch else C_SILK).lerp(C_RED, minf(age * 1.5, 1.0))
+		var pts := PackedVector2Array()
+		for k in range(24):
+			var yy := ty + k * 14.0
+			pts.append(Vector2(roundf(tx + sin(k * 0.55 - age * 18.0) * amp * (k / 23.0)), yy))
+		draw_polyline(pts, Color(tcol, maxf(0.0, 1.0 - age * 0.6)), 1.0)
 	for f in falling_ghosts:   # 落ちていく罪人（手足をばたつかせて、そのまま落下）
 		var fr: int = int(f[2] * 1.5) % 2
 		var fp: Vector2 = f[0]
+		if f.size() > 4 and f[4] > 0.0:   # 弾かれる直前: 白く光る
+			var wp := {"s": C_WHITE, "h": C_WHITE, "k": C_WHITE, "m": C_WHITE, "c": C_WHITE}
+			_spr(SPR_GHOST, fp.round(), wp if fmod(t, 0.08) < 0.05 else _ghost_pal(int(f[3])), int(f[3]) % 2 == 0)
+			continue
 		_spr(SPR_GHOST_RUN if fr == 1 else SPR_GHOST, fp.round(), _ghost_pal(int(f[3]) if f.size() > 3 else 0), fr == 1)
 
 	# カンダタ
@@ -1257,8 +1363,9 @@ func _draw_world() -> void:
 		var grow := 1.0 - pow(1.0 - minf(bk / 0.45, 1.0), 3.0)   # すばやく広がって止まる
 		var rr2 := roundf(blast_px * grow)
 		var fade := 1.0 - maxf(bk - 0.45, 0.0) / 0.55
-		draw_circle(bc, rr2, Color(C_WHITE, 0.18 * fade))
-		draw_arc(bc, rr2, 0, TAU, 48, Color(C_YELLOW, fade), 3.0)
+		var ring_col: Color = C_GOLD if shout_clutch else C_YELLOW
+		draw_circle(bc, rr2, Color(C_GOLD if shout_clutch else C_WHITE, (0.3 if shout_clutch else 0.18) * fade))
+		draw_arc(bc, rr2, 0, TAU, 48, Color(ring_col, fade), 4.0 if shout_clutch else 3.0)
 		draw_arc(bc, maxf(rr2 - 6.0, 0.0), 0, TAU, 48, Color(C_WHITE, 0.6 * fade), 1.0)
 		for k in range(16):   # 放射状の線
 			var ang := TAU * k / 16.0 + 0.2
@@ -1266,14 +1373,10 @@ func _draw_world() -> void:
 			draw_line(bc + Vector2(cos(ang), sin(ang)) * r0, bc + Vector2(cos(ang), sin(ang)) * rr2, Color(C_WHITE, 0.5 * fade), 1.0)
 
 	# 叫び演出
+	if shout_age < hitstop_total + 0.25:
+		_draw_speed_lines(Vector2(px, py - 6.0))
 	if fx_shout > 0.0:
-		# 叫びの文字はカンダタについていく（跳んでも画面の外へ流れない）
-		var sw := font.get_string_size(shout_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x * 2.0
-		var sx := minf(px + 22.0, FIELD_W - sw - 6.0)   # 画面の右端からはみ出さないように
-		if sx < px + 22.0 and px - 22.0 - sw > 6.0:      # 右に入らなければ左に出す
-			sx = px - 22.0 - sw
-		var sy := clampf(py - 6.0, 40.0, H - 40.0)
-		_label(Vector2(sx, sy), shout_text, 32, Color(C_YELLOW, minf(1.0, fx_shout * 2)))
+		_draw_shout_text(px, py)
 	for p in popups:
 		var a: float = 1.0 - p[3] / 1.2
 		var pc: Color = p[4]
@@ -1282,6 +1385,7 @@ func _draw_world() -> void:
 	_draw_lava()
 	_draw_particles()
 	_draw_heat_edge()
+	_draw_clutch_heartbeat()
 
 	# 案内: 初めてその場面になったときだけ、下にそっと出る
 	if phase == Phase.PLAY and tip_text != "":
@@ -1347,6 +1451,25 @@ func _draw_lava() -> void:
 			var rr := 1.0 + ph * 14.0
 			draw_arc(Vector2(bx, top + 2.0), rr, PI, TAU, 10, C_YELLOW, 1.0)
 			draw_circle(Vector2(bx, top + 3.0), rr - 1.0, Color(C_ORANGE, 0.8))
+
+
+func _draw_clutch_heartbeat() -> void:
+	# 九死に一生の圏内: 文字は出さず、画面が暗く沈み、縁が心臓の鼓動のように赤く脈打つ
+	if phase != Phase.PLAY or not (model.is_clutch() and model.can_shout()):
+		return
+	var p := fmod(t, 0.8)
+	var beat := 0.0
+	if p < 0.09:
+		beat = 1.0 - p / 0.09
+	elif p > 0.18 and p < 0.27:
+		beat = 0.7 * (1.0 - (p - 0.18) / 0.09)
+	draw_rect(Rect2(0, 0, FIELD_W, H), Color(C_BLACK, 0.28 + 0.1 * beat))
+	for i in range(10):
+		var a := (0.5 * beat + 0.15) * (1.0 - i / 10.0)
+		draw_rect(Rect2(0, i * 3.0, FIELD_W, 3), Color(C_RED, a))
+		draw_rect(Rect2(0, H - 3.0 - i * 3.0, FIELD_W, 3), Color(C_RED, a))
+		draw_rect(Rect2(i * 3.0, 0, 3, H), Color(C_RED, a))
+		draw_rect(Rect2(FIELD_W - 3.0 - i * 3.0, 0, 3, H), Color(C_RED, a))
 
 
 func _draw_heat_edge() -> void:
