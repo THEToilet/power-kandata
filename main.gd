@@ -322,6 +322,8 @@ var hitstop_total := 0.0         # 直前のヒットストップの長さ
 var slowmo := 0.0                # スローモーションの残り（九死に一生）
 var invert_t := 0.0              # 白黒反転の残り（九死に一生の瞬間）
 var invert_rect: ColorRect
+var blast_style := 5            # 叫びの衝撃波の見せ方 0=円 1=ギザギザ吹き出し 2=空間のゆがみ 3=砕けた音波 4=火の粉の輪 5=吹き出し＋ゆがみ
+var ripple_rect: ColorRect
 var shout_hold := 0.0            # 叫んだ直後にカメラを留める残り時間
 var hitstop := 0.0               # ヒットストップの残り時間（秒）
 var hitstop_frames := 0          # ヒットストップに入ってからのフレーム数（最初の数フレームだけ光らせる）
@@ -363,6 +365,7 @@ var bot_dash := false
 
 func _ready() -> void:
 	_setup_invert()
+	_setup_ripple()
 	get_window().title = "パワーカンダタ"   # 記録の保存先が変わらないよう、プロジェクト名は変えずにウィンドウの題だけ変える
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	var f := FontFile.new()
@@ -392,6 +395,55 @@ func _ready() -> void:
 	_load_ranking()
 	course = randi_range(1, 999)
 	_new_model()
+
+
+func _setup_ripple() -> void:
+	# 叫びの衝撃波で、背景が押し広げられる空間のゆがみ（画面を読み取ってずらす）
+	var layer := CanvasLayer.new()
+	layer.layer = 40
+	ripple_rect = ColorRect.new()
+	ripple_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ripple_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sh := Shader.new()
+	sh.code = """shader_type canvas_item;
+uniform sampler2D screen_tex : hint_screen_texture, filter_nearest;
+uniform vec2 center = vec2(320.0, 180.0);
+uniform float radius = 0.0;
+uniform float width = 26.0;
+uniform float strength = 10.0;
+void fragment() {
+	vec2 px = SCREEN_UV / SCREEN_PIXEL_SIZE;
+	vec2 d = px - center;
+	float dist = length(d);
+	float band = clamp(1.0 - abs(dist - radius) / width, 0.0, 1.0);
+	vec2 dir = dist > 0.001 ? d / dist : vec2(0.0);
+	vec2 off = -dir * band * band * strength;          // 波の手前に押し寄せるようにずらす
+	vec3 c = texture(screen_tex, (px + off) * SCREEN_PIXEL_SIZE).rgb;
+	c += vec3(0.25, 0.18, 0.08) * band * band * (strength / 14.0);   // 波の頭がうっすら光る
+	COLOR = vec4(c, 1.0);
+}"""
+	var mat := ShaderMaterial.new()
+	mat.shader = sh
+	ripple_rect.material = mat
+	ripple_rect.visible = false
+	layer.add_child(ripple_rect)
+	add_child(layer)
+
+
+func _update_ripple() -> void:
+	if ripple_rect == null:
+		return
+	var on := (blast_style == 2 or blast_style == 5) and stomp_fx > 0.0 and phase == Phase.PLAY
+	ripple_rect.visible = on
+	if not on:
+		return
+	var bk := 1.0 - stomp_fx / BLAST_TIME
+	var grow := 1.0 - pow(1.0 - minf(bk / 0.6, 1.0), 2.0)
+	var mat: ShaderMaterial = ripple_rect.material
+	mat.set_shader_parameter("center", Vector2(_sx(blast_at.x), _sy(blast_at.y)) + draw_off)
+	mat.set_shader_parameter("radius", blast_px * grow)
+	mat.set_shader_parameter("width", 18.0 + 20.0 * grow)
+	mat.set_shader_parameter("strength", (16.0 if shout_clutch else 11.0) * (1.0 - bk))
 
 
 func _setup_invert() -> void:
@@ -537,7 +589,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.echo:
 		return
-	if k == KEY_F1 or k == KEY_TAB:
+	if k == KEY_B:   # 試し用: 叫びの衝撃波の見せ方を切り替える
+		blast_style = (blast_style + 1) % 6
+		tip_text = "叫びの見せ方: %s" % ["0 円", "1 ギザギザ吹き出し", "2 空間のゆがみ", "3 砕けた音波", "4 火の粉の輪", "5 吹き出し＋ゆがみ"][blast_style]
+		tip_t = 0.0
+	elif k == KEY_F1 or k == KEY_TAB:
 		panel_open = true
 	elif phase == Phase.TITLE and (k == KEY_SPACE or k == KEY_ENTER):
 		_restart()
@@ -584,6 +640,7 @@ func _process(delta: float) -> void:
 		return
 	shout_age += delta
 	invert_t = maxf(0.0, invert_t - delta)
+	_update_ripple()
 	if invert_rect:
 		invert_rect.visible = invert_t > 0.0
 	# ヒットストップ: 叫んだ瞬間、世界を一瞬止める（揺れだけは続ける）
@@ -784,6 +841,11 @@ func _on_shout(n_ghosts: int, from_x: float) -> void:
 	shake = minf(1.8, 0.8 + 0.14 * model.last_stones)   # 大勢を踏み台にするほど揺れる
 	shout_age = 0.0
 	shout_clutch = model.last_clutch
+	if blast_style == 4:   # 火の粉の輪: ちょうど衝撃波の範囲まで飛んで消える
+		for k in range(56):
+			var ang := TAU * k / 56.0
+			var spd := model.blast_r / 0.45
+			_part(sp, Vector2(cos(ang), sin(ang)) * spd, 0.45, [C_YELLOW, C_ORANGE, C_WHITE][k % 3], 2.0, 0.0, 0.0)
 	# 糸が切れる瞬間: 足もとの切り口に火花
 	_burst(sp + Vector2(0, 18), 18, [C_WHITE, C_YELLOW, C_ORANGE], 110.0, 2.0, 0.45, 120.0)
 	if model.last_stones >= 5:
@@ -806,6 +868,58 @@ func _on_shout(n_ghosts: int, from_x: float) -> void:
 	shout_hold = 0.3
 	blast_at = Vector2(from_x, model.air_from)
 	blast_px = model.blast_r
+
+
+func _draw_blast() -> void:
+	var bc := Vector2(_sx(blast_at.x), _sy(blast_at.y))
+	var bk := 1.0 - stomp_fx / BLAST_TIME              # 0→1
+	var grow := 1.0 - pow(1.0 - minf(bk / 0.45, 1.0), 3.0)
+	var rr2 := roundf(blast_px * grow)
+	var fade := 1.0 - maxf(bk - 0.45, 0.0) / 0.55
+	var accent: Color = C_GOLD if shout_clutch else C_YELLOW
+	match blast_style:
+		0:   # 円（元の見せ方）
+			draw_circle(bc, rr2, Color(C_WHITE, 0.18 * fade))
+			draw_arc(bc, rr2, 0, TAU, 48, Color(accent, fade), 3.0)
+			draw_arc(bc, maxf(rr2 - 6.0, 0.0), 0, TAU, 48, Color(C_WHITE, 0.6 * fade), 1.0)
+		1, 5:   # 漫画のギザギザ吹き出し（大きさ＝範囲）。ポンと出て、すっと縮んで消える
+			var pop := clampf(bk / 0.12, 0.0, 1.0)
+			var shrink := clampf((bk - 0.55) / 0.45, 0.0, 1.0)
+			var rad := blast_px * 0.62 * (0.6 + 0.4 * (1.0 - pow(1.0 - pop, 3.0))) * (1.0 - 0.5 * shrink)
+			if rad > 4.0:
+				var n := 18
+				var rng := RandomNumberGenerator.new()
+				rng.seed = 7 + int(blast_at.y)
+				var outer := PackedVector2Array()
+				var inner := PackedVector2Array()
+				for i in range(n * 2):
+					var ang := TAU * i / (n * 2) + 0.1
+					var r := rad * (1.0 if i % 2 == 0 else 0.62) * (0.85 + rng.randf() * 0.3)
+					outer.append(bc + Vector2(cos(ang), sin(ang)) * (r + 4.0))
+					inner.append(bc + Vector2(cos(ang), sin(ang)) * r)
+				var a := 1.0 - shrink
+				draw_colored_polygon(outer, Color(C_BLACK, a))
+				draw_colored_polygon(inner, Color(C_GOLD if shout_clutch else Color8(255, 246, 220), a))
+				var inner2 := PackedVector2Array()
+				for v in inner:
+					inner2.append(bc + (v - bc) * 0.72)
+				draw_colored_polygon(inner2, Color(C_ORANGE if shout_clutch else C_RED, a * 0.9))
+		2:   # 空間のゆがみだけ（描画はシェーダー）
+			pass
+		3:   # 砕けた音波: 太い弧が途切れ途切れに外へ
+			for w in range(3):
+				var rw := blast_px * clampf(grow * 1.15 - w * 0.18, 0.0, 1.0)
+				if rw < 8.0:
+					continue
+				var seg := 0
+				var ang := w * 0.4
+				while ang < TAU + w * 0.4:
+					var len := 0.32 + 0.12 * float((seg * 7 + w) % 3)
+					draw_arc(bc, rw, ang, ang + len, 6, Color(accent if w == 0 else C_WHITE, fade * (1.0 - w * 0.25)), 4.0 - w)
+					ang += len + 0.18
+					seg += 1
+		4:   # 輪は描かない: 外へ吹き飛ぶ火の粉で範囲を見せる（粒は叫んだ瞬間に出す）
+			pass
 
 
 func _draw_speed_lines(c: Vector2) -> void:
@@ -1331,6 +1445,10 @@ func _draw_world() -> void:
 		var ring_c := (hand + (top_pt - hand).normalized() * 20.0).round()
 		_draw_ring(ring_c, snap)
 
+	# 叫びの衝撃波（見せ方は blast_style で切り替え）
+	if stomp_fx > 0.0:
+		_draw_blast()
+
 	# ちぎれて落ちていく糸
 	for th in falling_thread:   # 切れた糸: 鞭のようにしなりながら落ちていく
 		var age: float = th[2]
@@ -1355,22 +1473,6 @@ func _draw_world() -> void:
 	# カンダタ
 	if not (model.invuln_left > 0.0 and fmod(t, 0.16) < 0.08):
 		_draw_kandata(Vector2(px, py))
-
-	# 叫びの衝撃波: 円が一気に広がって、中の障害を消し飛ばす
-	if stomp_fx > 0.0:
-		var bc := Vector2(_sx(blast_at.x), _sy(blast_at.y))
-		var bk := 1.0 - stomp_fx / BLAST_TIME              # 0→1
-		var grow := 1.0 - pow(1.0 - minf(bk / 0.45, 1.0), 3.0)   # すばやく広がって止まる
-		var rr2 := roundf(blast_px * grow)
-		var fade := 1.0 - maxf(bk - 0.45, 0.0) / 0.55
-		var ring_col: Color = C_GOLD if shout_clutch else C_YELLOW
-		draw_circle(bc, rr2, Color(C_GOLD if shout_clutch else C_WHITE, (0.3 if shout_clutch else 0.18) * fade))
-		draw_arc(bc, rr2, 0, TAU, 48, Color(ring_col, fade), 4.0 if shout_clutch else 3.0)
-		draw_arc(bc, maxf(rr2 - 6.0, 0.0), 0, TAU, 48, Color(C_WHITE, 0.6 * fade), 1.0)
-		for k in range(16):   # 放射状の線
-			var ang := TAU * k / 16.0 + 0.2
-			var r0 := rr2 * 0.55
-			draw_line(bc + Vector2(cos(ang), sin(ang)) * r0, bc + Vector2(cos(ang), sin(ang)) * rr2, Color(C_WHITE, 0.5 * fade), 1.0)
 
 	# 叫び演出
 	if shout_age < hitstop_total + 0.25:

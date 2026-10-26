@@ -12,6 +12,7 @@ var course := 1
 var margin := 1.0
 var want_panel := false
 var shots := {}
+var quick := false
 
 
 func _ready() -> void:
@@ -30,6 +31,10 @@ func _ready() -> void:
 	main.autopilot = true
 	if wave:
 		main.tuning["fire_mode"] = 1.0
+	for a in args:   # style=N で叫びの見せ方を切り替えて撮る
+		if a.begins_with("style="):
+			main.blast_style = int(a.substr(6))
+			quick = true
 
 
 func _snap(n: String) -> void:
@@ -126,6 +131,16 @@ func _process(_d: float) -> void:
 		if main.fx_shout > 0.0 and main.fx_shout < 0.4 and m.elapsed > 4.0 and not shots.has("shout_late"):
 			shots["shout_late"] = true
 			_snap("shout_late")
+		if quick and main.shout_age > 0.06 and main.shout_age < 0.09 and m.elapsed > 4.0 and not shots.has("cmp_a"):
+			shots["cmp_a"] = true
+			_snap("cmp_a")
+		if quick and main.shout_age > 0.20 and main.shout_age < 0.23 and shots.has("cmp_a") and not shots.has("cmp_b"):
+			shots["cmp_b"] = true
+			_snap("cmp_b")
+		if quick and main.shout_age > 0.34 and main.shout_age < 0.37 and shots.has("cmp_b") and not shots.has("cmp_c"):
+			shots["cmp_c"] = true
+			_snap("cmp_c")
+			get_tree().quit()
 		if main.shout_age > 0.12 and main.shout_age < 0.16 and m.elapsed > 4.0 and not shots.has("punch"):
 			shots["punch"] = true
 			_snap("punch")
