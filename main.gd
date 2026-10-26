@@ -1204,6 +1204,7 @@ func _draw_world() -> void:
 		var snap := model.time_to_snap(true, model.dashing)
 		# 下に余っている糸は、切った所（下端）まで。登るほど伸びていく
 		var end_y := minf(_sy(model.thread_end) - 15.0, H + 20.0)
+		end_y = minf(end_y, _sy(0.0) + 16.0)   # 糸は地面より下には垂れない（スタート地点で地面に届いて止まる）
 		var pts := PackedVector2Array([hand])
 		var i := 0.0
 		while py + 18.0 + i * GHOST_GAP < end_y:
