@@ -1732,23 +1732,30 @@ func _draw_result() -> void:
 		# 景色を隠さないよう、上に小さく
 		var a := clampf((phase_t - 1.8) / 0.5, 0.0, 1.0)
 		var wx := W * 0.5
-		draw_rect(Rect2(wx - 160, 24, 320, 196), Color(C_BLACK, 0.5 * a))
+		draw_rect(Rect2(wx - 170, 24, 340, 204), Color(C_BLACK, 0.6 * a))
 		_label(Vector2(wx, 58), "極楽に到達！", 32, Color(C_YELLOW, a), HORIZONTAL_ALIGNMENT_CENTER)
 		_label(Vector2(wx, 82), "TIME %.1f   RANK %s" % [model.elapsed, _rank(model.elapsed)], 16, Color(C_WHITE, a), HORIZONTAL_ALIGNMENT_CENTER)
 		# 上位10件（左に1〜5位、右に6〜10位）。今回のタイムは点滅
 		_label(Vector2(wx, 106), "― %s ランキング ―" % ThreadModel.DIFFICULTY_NAMES[difficulty], 16, Color(C_GOLD, a), HORIZONTAL_ALIGNMENT_CENTER)
 		var lst: Array = ranking[difficulty]
+		# 1行 = 「順位」「タイム（秒・右そろえ）」「日付（薄く）」。左の列に1〜5位、右の列に6〜10位
+		draw_rect(Rect2(wx, 122, 1, 92), Color(C_WHITE, 0.25 * a))   # 列の仕切り
 		for i in range(RANKING_SIZE):
-			var col_x := wx - 148.0 if i < 5 else wx + 8.0
-			var row_y := 130.0 + float(i % 5) * 18.0
-			var txt := "%2d  ----.-" % (i + 1)
-			var c := Color(C_WHITE, 0.45 * a)
+			var col_x := wx - 150.0 if i < 5 else wx + 10.0
+			var row_y := 136.0 + float(i % 5) * 18.0
+			var is_new := i == new_rank
+			var blink := is_new and fmod(t, 0.4) < 0.28
+			var rank_col: Color = [C_GOLD, Color8(210, 210, 220), C_ORANGE][i] if i < 3 else Color(C_WHITE, 0.7)
+			if is_new:
+				rank_col = C_YELLOW if blink else C_ORANGE
+				_label(Vector2(col_x - 18.0, row_y), "＞", 16, Color(rank_col, a))   # 今回の記録の印
+			_label(Vector2(col_x, row_y), "%d位" % (i + 1), 16, Color(rank_col, a))
 			if i < lst.size():
-				txt = "%2d  %6.1f  %s" % [i + 1, float(lst[i]["t"]), lst[i]["d"]]
-				c = Color(C_WHITE, 0.9 * a)
-			if i == new_rank:
-				c = Color(C_YELLOW, a) if fmod(t, 0.4) < 0.28 else Color(C_ORANGE, a)
-			_label(Vector2(col_x, row_y), txt, 16, c)
+				var tc: Color = (C_YELLOW if blink else C_ORANGE) if is_new else C_WHITE
+				_label(Vector2(col_x + 92.0, row_y), "%.1f秒" % float(lst[i]["t"]), 16, Color(tc, a), HORIZONTAL_ALIGNMENT_RIGHT)
+				_label(Vector2(col_x + 102.0, row_y), str(lst[i]["d"]), 16, Color(C_WHITE, 0.45 * a))
+			else:
+				_label(Vector2(col_x + 92.0, row_y), "―", 16, Color(C_WHITE, 0.3 * a), HORIZONTAL_ALIGNMENT_RIGHT)
 		if fmod(t, 1.0) < 0.6 and a >= 1.0:
 			_label(Vector2(wx, 346), "PUSH START", 16, C_WHITE, HORIZONTAL_ALIGNMENT_CENTER)
 		return
