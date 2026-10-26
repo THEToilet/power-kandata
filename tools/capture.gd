@@ -58,7 +58,10 @@ func _process(_d: float) -> void:
 		return
 	var m = main.model
 	if main.phase == main.Phase.PLAY and not main.panel_open:
+		if OS.get_cmdline_user_args().has("snap") and m.elapsed > 10.0 and m.ghosts >= 1.0 and m.state == ThreadModel.State.CLIMBING:
+			m.durability = 0.0   # 糸切れ演出の確認用
 		var inp: Array = Bot.bot_inputs(m, margin, "n2", "smart", 30)
+		if OS.get_cmdline_user_args().has("snap") and m.durability <= 0.0: inp[1] = false
 		main.bot_climb = inp[0]
 		main.bot_shout = inp[1]
 		main.bot_swing = inp[2]
@@ -159,6 +162,12 @@ func _process(_d: float) -> void:
 	if main.phase == main.Phase.RESULT and m.state == m.State.WON:
 		for pt in [0.3, 1.0, 2.6]:
 			var key := "win_%.1f" % pt
+			if main.phase_t >= pt and not shots.has(key):
+				shots[key] = true
+				_snap(key)
+	if main.phase == main.Phase.RESULT and m.state == m.State.TORN:
+		for pt in [0.05, 0.5, 1.2, 2.0, 2.6]:
+			var key := "torn_%.2f" % pt
 			if main.phase_t >= pt and not shots.has(key):
 				shots[key] = true
 				_snap(key)

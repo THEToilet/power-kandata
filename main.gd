@@ -352,6 +352,8 @@ var early_t := 0.0               # 早すぎる Space の注意表示
 var fx_hit := 0.0
 var shake := 0.0
 var fall_t := 0.0
+var torn_x := 0.0               # 糸が切れた位置（上の糸が跳ね上がる起点）
+const GAMEOVER_DELAY := 1.4     # 落ちていく様子を見せてから GAME OVER を出すまで（秒）
 var panel_open := false
 var panel_sel := 0
 var draw_off := Vector2.ZERO     # 画面揺れのオフセット（文字の拡大描画で使う）
@@ -594,7 +596,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		panel_open = true
 	elif phase == Phase.TITLE and (k == KEY_SPACE or k == KEY_ENTER):
 		_restart()
-	elif phase == Phase.RESULT and phase_t > 0.9 and (k == KEY_SPACE or k == KEY_ENTER):
+	elif phase == Phase.RESULT and phase_t > (GAMEOVER_DELAY + 0.6 if model.state == ThreadModel.State.TORN else 0.9) and (k == KEY_SPACE or k == KEY_ENTER):
 		course = randi_range(1, 999)   # 毎回ちがう地獄
 		_restart()
 	elif k == KEY_R and phase != Phase.TITLE:
@@ -725,10 +727,15 @@ func _process(delta: float) -> void:
 				if new_record:
 					best[difficulty] = int(model.height)
 					_save_records()
-				_burst(Vector2(_sx(model.x), _player_sy()), 60, [C_RED, C_BLOOD, C_ORANGE], 140.0, 2.0, 1.0, 120.0)
+				# 糸が切れる: 手元で「ブチッ」と火花、一瞬止まって、カメラはそのまま。カンダタたちが落ちていく
+				_burst(Vector2(_sx(model.x), _player_sy() - 15.0), 26, [C_WHITE, C_YELLOW, C_SILK], 120.0, 2.0, 0.5, 80.0)
 				shake = 1.0
+				hitstop = 0.14
+				hitstop_frames = 0
+				shout_age = 99.0
+				torn_x = model.x
 				falling_thread.append([h_before, model.x, 0.0])
-				_drop_ghosts(int(model.ghosts), model.height, model.x)
+				_drop_ghosts(int(model.ghosts), model.height, model.x, false, true)
 			phase = Phase.RESULT
 			phase_t = 0.0
 
@@ -765,7 +772,7 @@ func _process(delta: float) -> void:
 				_burst(f[0], 8, [C_WHITE, C_YELLOW], 90.0, 2.0, 0.3, 0.0)
 				shake = maxf(shake, 0.35)
 			continue
-		f[1].y += 550.0 * delta
+		f[1].y += (230.0 if phase == Phase.RESULT and model.state == ThreadModel.State.TORN else 550.0) * delta   # 糸切れ時はゆっくり見せる
 		f[0] += f[1] * delta
 		f[2] += delta * 6.0
 	falling_ghosts = falling_ghosts.filter(func(f): return f[0].y < H + 40.0)
@@ -969,7 +976,7 @@ func _draw_shout_text(px: float, py: float) -> void:
 		x += cw * sc_final
 
 
-func _drop_ghosts(n_ghosts: int, from_h: float, from_x: float, kicked := false) -> void:
+func _drop_ghosts(n_ghosts: int, from_h: float, from_x: float, kicked := false, together := false) -> void:
 	# kicked: 踏み台にされて真下へ蹴り落とされる（叫んだとき）
 	var py := _sy(from_h)
 	for i in range(n_ghosts):
@@ -979,6 +986,8 @@ func _drop_ghosts(n_ghosts: int, from_h: float, from_x: float, kicked := false) 
 		var v := Vector2(randf_range(-110, 110), randf_range(-130, -30))
 		if kicked:
 			v = Vector2(randf_range(-40, 40), randf_range(160, 260))
+		elif together:   # 糸が切れて、カンダタと一緒にそのまま落ちる
+			v = Vector2(randf_range(-25, 25), randf_range(-20, 10))
 		falling_ghosts.append([Vector2(_gx(from_x, i) + (8.0 if i % 2 == 0 else -8.0), gy), v, 0.0, i, (0.05 + i * 0.05) if kicked else 0.0])
 
 
@@ -1090,7 +1099,7 @@ func _gx(hand_x: float, i: float) -> float:
 func _player_sy() -> float:
 	var y := _sy(model.height)
 	if model.state == ThreadModel.State.TORN:
-		y += roundf(fall_t * fall_t * 450.0)
+		y += roundf(fall_t * fall_t * 170.0)   # ゆっくり落ちていくのを見せる
 	return y
 
 
@@ -1198,7 +1207,7 @@ func _draw() -> void:
 			_draw_hud()
 		if phase == Phase.TITLE:
 			_draw_title()
-		elif phase == Phase.RESULT and phase_t > 0.9:
+		elif phase == Phase.RESULT and phase_t > (GAMEOVER_DELAY if model.state == ThreadModel.State.TORN else 0.9):
 			_draw_result()
 	if hitstop > 0.0 and hitstop_frames < 3:   # 止まった瞬間だけ画面を白く光らせる
 		draw_rect(Rect2(0, 0, FIELD_W, H), Color(1, 1, 1, 0.35 if hitstop_frames < 2 else 0.15))
@@ -1416,7 +1425,21 @@ func _draw_world() -> void:
 		tc = C_SILK.lerp(C_RED, (1.0 - model.durability / ThreadModel.DURABILITY_MAX) * 0.7)
 		if model.time_to_snap(true, false) < 1.3 and fmod(t, 0.3) < 0.15:
 			tc = C_RED
-	draw_line(thread_top, hand, tc, 1.0)
+	if model.state == ThreadModel.State.TORN:
+		# 切れた上の糸: 切り口が跳ね上がり、しなりながら天へ引き上げられていく
+		var snap_y := _sy(model.height) - 15.0 - minf(fall_t * fall_t * 900.0 + fall_t * 120.0, 600.0)
+		var amp := 10.0 * maxf(0.0, 1.0 - fall_t * 1.5)
+		var pts := PackedVector2Array()
+		var top_y := thread_top.y
+		for k in range(17):
+			var f := k / 16.0
+			var yy := lerpf(top_y, snap_y, f)
+			var xx := lerpf(thread_top.x, _sx(torn_x), f) + sin(f * 9.0 - fall_t * 24.0) * amp * f
+			pts.append(Vector2(roundf(xx), roundf(yy)))
+		if snap_y > top_y:
+			draw_polyline(pts, C_SILK, 1.0)
+	else:
+		draw_line(thread_top, hand, tc, 1.0)
 
 	# 糸（下側）と罪人と、糸の耐久度の○ゲージ
 	if model.state == ThreadModel.State.CLIMBING:
@@ -1859,6 +1882,9 @@ func _draw_kandata(p: Vector2) -> void:
 	if model.stun_left > 0.0:
 		pal["s"] = Color8(250, 140, 120)
 	var lean := clampf(model.vx * 0.01, -4.0, 4.0)
+	if model.state == ThreadModel.State.TORN:   # 落ちていく: 手足をばたつかせる
+		_spr(SPR_KANDATA_JUMP, Vector2(p.x, p.y), pal, int(fall_t * 8.0) % 2 == 1)
+		return
 	if model.state == ThreadModel.State.AIR:
 		_spr(SPR_KANDATA_JUMP, Vector2(p.x + roundf(lean), p.y), pal)
 		return
@@ -2056,16 +2082,17 @@ func _draw_result() -> void:
 		if fmod(t, 1.0) < 0.6 and a >= 1.0:
 			_label(Vector2(wx, 346), "PUSH START", 16, C_WHITE, HORIZONTAL_ALIGNMENT_CENTER)
 		return
-	draw_rect(Rect2(0, 0, FIELD_W, H), Color(C_BLACK, 0.8))
+	var ga := clampf((phase_t - GAMEOVER_DELAY) / 0.4, 0.0, 1.0)   # ゆっくり暗くなる
+	draw_rect(Rect2(0, 0, FIELD_W, H), Color(C_BLACK, 0.8 * ga))
 	var cx := FIELD_W * 0.5
-	_label(Vector2(cx, 120), "GAME OVER", 32, C_RED, HORIZONTAL_ALIGNMENT_CENTER)
-	_label(Vector2(cx, 172), "%d/%dm" % [int(model.height), int(ThreadModel.GOAL)], 32, C_GOLD, HORIZONTAL_ALIGNMENT_CENTER)
+	_label(Vector2(cx, 120), "GAME OVER", 32, Color(C_RED, ga), HORIZONTAL_ALIGNMENT_CENTER)
+	_label(Vector2(cx, 172), "%d/%dm" % [int(model.height), int(ThreadModel.GOAL)], 32, Color(C_GOLD, ga), HORIZONTAL_ALIGNMENT_CENTER)
 	if new_record:
 		if fmod(t, 0.4) < 0.28:
-			_label(Vector2(cx, 200), "NEW RECORD!", 16, C_YELLOW, HORIZONTAL_ALIGNMENT_CENTER)
+			_label(Vector2(cx, 200), "NEW RECORD!", 16, Color(C_YELLOW, ga), HORIZONTAL_ALIGNMENT_CENTER)
 	else:
-		_label(Vector2(cx, 200), "HI %dm" % best[difficulty], 16, Color(C_WHITE, 0.6), HORIZONTAL_ALIGNMENT_CENTER)
-	if fmod(t, 1.0) < 0.6:
+		_label(Vector2(cx, 200), "HI %dm" % best[difficulty], 16, Color(C_WHITE, 0.6 * ga), HORIZONTAL_ALIGNMENT_CENTER)
+	if fmod(t, 1.0) < 0.6 and phase_t > GAMEOVER_DELAY + 0.6:
 		_label(Vector2(cx, 280), "PUSH START", 16, C_WHITE, HORIZONTAL_ALIGNMENT_CENTER)
 
 
