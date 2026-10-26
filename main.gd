@@ -316,6 +316,7 @@ var falling_ghosts: Array = []   # [pos, vel, rot]
 var falling_thread: Array = []   # [world_h, x, age]
 var popups: Array = []           # [text, world_h, x, age, color]
 var fx_shout := 0.0
+var shout_hold := 0.0            # 叫んだ直後にカメラを留める残り時間
 var hitstop := 0.0               # ヒットストップの残り時間（秒）
 var hitstop_frames := 0          # ヒットストップに入ってからのフレーム数（最初の数フレームだけ光らせる）
 var stomp_fx := 0.0              # 叫びの衝撃波（残り時間）
@@ -652,6 +653,9 @@ func _process(delta: float) -> void:
 
 	# カメラ: 跳んでいる間は着地点へ先回りして、上の景色を先に見せる
 	var cam_target: float = model.air_to if model.state == ThreadModel.State.AIR else model.height
+	if shout_hold > 0.0:   # 叫んだ直後は、カメラをその場に少し留めて、叫びと衝撃波を見せる
+		shout_hold -= delta
+		cam_target = model.air_from
 	cam_h = lerpf(cam_h, cam_target, minf(1.0, delta * (9.0 if model.state == ThreadModel.State.AIR else 6.0)))
 	# カンダタが画面の外へ出ないように
 	cam_h = clampf(cam_h, model.height - (PLAYER_SY - 30.0) / PPM, model.height + (H - 40.0 - PLAYER_SY) / PPM)
@@ -755,6 +759,7 @@ func _on_shout(n_ghosts: int, from_x: float) -> void:
 	if model.last_clutch:
 		hitstop = 0.24
 	hitstop_frames = 0
+	shout_hold = 0.3
 	blast_at = Vector2(from_x, model.air_from)
 	blast_px = model.blast_r
 
@@ -1265,10 +1270,13 @@ func _draw_world() -> void:
 
 	# 叫び演出
 	if fx_shout > 0.0:
-		var c := Vector2(_sx(falling_thread[-1][1]) if not falling_thread.is_empty() else px, _sy(model.air_from))
+		# 叫びの文字はカンダタについていく（跳んでも画面の外へ流れない）
 		var sw := font.get_string_size(shout_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x * 2.0
-		var sx := minf(c.x + 18.0, FIELD_W - sw - 6.0)   # 画面の右端からはみ出さないように
-		_label(Vector2(sx, c.y - 4.0), shout_text, 32, Color(C_YELLOW, minf(1.0, fx_shout * 2)))
+		var sx := minf(px + 22.0, FIELD_W - sw - 6.0)   # 画面の右端からはみ出さないように
+		if sx < px + 22.0 and px - 22.0 - sw > 6.0:      # 右に入らなければ左に出す
+			sx = px - 22.0 - sw
+		var sy := clampf(py - 6.0, 40.0, H - 40.0)
+		_label(Vector2(sx, sy), shout_text, 32, Color(C_YELLOW, minf(1.0, fx_shout * 2)))
 	for p in popups:
 		var a: float = 1.0 - p[3] / 1.2
 		var pc: Color = p[4]
