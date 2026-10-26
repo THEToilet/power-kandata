@@ -356,6 +356,7 @@ var bot_dash := false
 
 
 func _ready() -> void:
+	get_window().title = "パワーカンダタ"   # 記録の保存先が変わらないよう、プロジェクト名は変えずにウィンドウの題だけ変える
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	var f := FontFile.new()
 	if f.load_dynamic_font("res://fonts/DotGothic16-Regular.ttf") == OK:
@@ -1701,15 +1702,81 @@ func _shadow_label(p: Vector2, txt: String, col: Color, align := HORIZONTAL_ALIG
 
 
 func _draw_title() -> void:
-	# ファミコン風: タイトル、難易度、スタートだけ。遊び方はプレイ中の案内で
-	draw_rect(Rect2(0, 0, W, H), Color(C_BLACK, 0.85))
+	# タイトル: 地獄の底から天へ伸びる一本の糸。カンダタがすがり、その下に罪人が連なる（原作の一場面）
 	var cx := W * 0.5
-	_label(Vector2(cx, 120), "パワーカンダタ（仮）", 32, C_GOLD, HORIZONTAL_ALIGNMENT_CENTER)
-	_spr(SPR_KANDATA, Vector2(cx, 172), {"s": C_SKIN, "h": C_HAIR, "k": C_BLACK, "m": C_RED, "c": C_CLOTH}, false, 3)
+	# 空: 上は闇、下ほどマグマに照らされて赤い
+	for i in range(18):
+		draw_rect(Rect2(0, i * 20, W, 20), C_BLACK.lerp(C_BLOOD, pow(i / 17.0, 1.6)))
+	# 天から差す細い光（糸のまわり）
+	for k in range(6):
+		var lw := 6.0 + k * 10.0
+		draw_rect(Rect2(cx - lw * 0.5, 0, lw, 200 - k * 18), Color(C_YELLOW, 0.035))
+	# 舞い上がる火の粉
+	for i in range(30):
+		var ex := fmod(i * 61.0 + sin(t * 0.7 + i) * 8.0, W)
+		var ey := fmod(i * 47.0 - t * (14.0 + i % 5 * 5.0), H)
+		if ey < 0:
+			ey += H
+		draw_rect(Rect2(roundf(ex), roundf(ey), 1 + i % 2, 1 + i % 2), Color(C_ORANGE, 0.35 + 0.4 * float(i % 3) / 2.0))
+	# 遠くの針の山（2層のシルエットに細い針）
+	for layer in range(2):
+		var far := layer == 0
+		var base := 312.0 if far else 334.0
+		var col := Color8(48, 14, 22) if far else Color8(26, 8, 14)
+		var x := 0.0
+		while x < W:
+			var hh := (52.0 if far else 34.0) + 26.0 * absf(sin((x + layer * 90.0) * 0.019)) + 8.0 * sin(x * 0.07 + layer)
+			var top := roundf(base - hh)
+			draw_rect(Rect2(x, top, 2, H - top), col)
+			if int(x) % 4 == 0:
+				draw_rect(Rect2(x, top - 6.0 - float(int(x * 3.0) % 5), 1, 6.0 + float(int(x * 3.0) % 5)), Color8(150, 120, 120) if not far else Color8(90, 60, 66))
+			x += 2.0
+	# 地の底のマグマ
+	var lt := 344.0
+	draw_rect(Rect2(0, lt, W, H - lt), C_RED)
+	var lx := 0.0
+	while lx < W:
+		var wy := roundf(lt + sin(lx * 0.06 + t * 2.4) * 2.0)
+		draw_rect(Rect2(lx, wy - 1, 2, 2), C_YELLOW)
+		draw_rect(Rect2(lx, wy + 1, 2, 3), C_ORANGE)
+		lx += 2.0
+	for i in range(8):
+		draw_rect(Rect2(0, lt - 8.0 - i * 4.0, W, 4), Color(C_ORANGE, 0.06 - i * 0.007))
+	# 糸と蜘蛛
+	var sway := sin(t * 1.1) * 5.0
+	var hand := Vector2(roundf(cx + sway), 150.0)
+	draw_line(Vector2(cx, 0), hand, C_SILK, 1.0)
+	_spr(SPR_SPIDER, Vector2(cx, 120 + roundf(sin(t * 2.0) * 2.0)), {"l": C_BLACK, "b": Color8(60, 40, 52), "e": C_RED})
+	# カンダタと、その下に連なる罪人たち（糸は下へ続く）
+	var pal := {"s": C_SKIN, "h": C_HAIR, "k": C_BLACK, "m": C_RED, "c": C_CLOTH}
+	_spr(SPR_KANDATA, Vector2(hand.x, hand.y + 22.0), pal, false, 3)
+	var prev := hand + Vector2(0, 42)
+	for g in range(3):
+		var gp := Vector2(roundf(cx + sway * (1.0 - 0.25 * (g + 1)) + (9.0 if g % 2 == 0 else -9.0)), 212.0 + g * 30.0)
+		draw_line(prev, Vector2(roundf(cx + sway * (1.0 - 0.25 * (g + 1))), gp.y - 18.0), C_SILK, 1.0)
+		prev = Vector2(roundf(cx + sway * (1.0 - 0.25 * (g + 1))), gp.y + 8.0)
+		_spr(SPR_GHOST, gp, _ghost_pal(g), g % 2 == 1, 3)
+	# 題字: 大きく、黒いふちと赤い影
+	_draw_logo(Vector2(cx, 58), "パワーカンダタ")
+	_label(Vector2(cx, 96), "― 蜘蛛の糸 ―", 16, Color(C_WHITE, 0.75), HORIZONTAL_ALIGNMENT_CENTER)
 	if best_time[difficulty] > 0.0:
-		_label(Vector2(cx, 240), "BEST %.1f秒" % best_time[difficulty], 16, Color(C_WHITE, 0.6), HORIZONTAL_ALIGNMENT_CENTER)
-	if fmod(t, 1.0) < 0.6:
-		_label(Vector2(cx, 286), "PUSH START", 16, C_WHITE, HORIZONTAL_ALIGNMENT_CENTER)
+		_label(Vector2(W - 12, H - 30), "BEST %.1f秒" % best_time[difficulty], 16, Color(C_WHITE, 0.8), HORIZONTAL_ALIGNMENT_RIGHT)
+	if fmod(t, 1.0) < 0.65:
+		_label(Vector2(cx, 334), "PUSH START", 16, C_WHITE, HORIZONTAL_ALIGNMENT_CENTER)
+
+
+func _draw_logo(center: Vector2, text: String) -> void:
+	# ドット文字を3倍にして、8方向の黒いふち＋赤い影＋金の本体で描く
+	var sc := 3.0
+	var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
+	var p := Vector2(roundf(center.x / sc - tw * 0.5), roundf(center.y / sc + 6.0))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2(sc, sc))
+	for o in [Vector2(1, 2), Vector2(0, 2), Vector2(2, 2)]:
+		draw_string(font, p + o, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, C_BLOOD)   # 影
+	for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1), Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+		draw_string(font, p + o, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, C_BLACK)   # ふち
+	draw_string(font, p, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, C_GOLD)
+	draw_set_transform(Vector2.ZERO)
 
 
 func _rank(sec: float) -> String:
@@ -1727,7 +1794,7 @@ func _draw_result() -> void:
 		# 景色を隠さないよう、上に小さく
 		var a := clampf((phase_t - 1.8) / 0.5, 0.0, 1.0)
 		var wx := W * 0.5
-		draw_rect(Rect2(wx - 194, 24, 388, 204), Color(C_BLACK, 0.6 * a))
+		draw_rect(Rect2(wx - 170, 24, 340, 204), Color(C_BLACK, 0.6 * a))
 		_label(Vector2(wx, 58), "極楽に到達！", 32, Color(C_YELLOW, a), HORIZONTAL_ALIGNMENT_CENTER)
 		_label(Vector2(wx, 82), "TIME %.1f   RANK %s" % [model.elapsed, _rank(model.elapsed)], 16, Color(C_WHITE, a), HORIZONTAL_ALIGNMENT_CENTER)
 		# 上位10件（左に1〜5位、右に6〜10位）。今回のタイムは点滅
@@ -1736,7 +1803,7 @@ func _draw_result() -> void:
 		# 1行 = 「順位」「タイム（秒・右そろえ）」「日付（薄く）」。左の列に1〜5位、右の列に6〜10位
 		draw_rect(Rect2(wx, 122, 1, 92), Color(C_WHITE, 0.25 * a))   # 列の仕切り
 		for i in range(RANKING_SIZE):
-			var col_x := wx - 172.0 if i < 5 else wx + 12.0
+			var col_x := wx - 150.0 if i < 5 else wx + 10.0
 			var row_y := 136.0 + float(i % 5) * 18.0
 			var is_new := i == new_rank
 			var blink := is_new and fmod(t, 0.4) < 0.28
@@ -1747,14 +1814,10 @@ func _draw_result() -> void:
 			_label(Vector2(col_x, row_y), "%d位" % (i + 1), 16, Color(rank_col, a))
 			if i < lst.size():
 				var tc: Color = (C_YELLOW if blink else C_ORANGE) if is_new else C_WHITE
-				_label(Vector2(col_x + 82.0, row_y), "%.1f秒" % float(lst[i]["t"]), 16, Color(tc, a), HORIZONTAL_ALIGNMENT_RIGHT)
-				var ds := str(lst[i]["d"])
-				var this_year: int = Time.get_date_dict_from_system().year
-				if int(lst[i].get("y", this_year)) != this_year:   # 今年じゃない記録だけ年をつける
-					ds = "%d/%s" % [int(lst[i]["y"]), ds]
-				_label(Vector2(col_x + 88.0, row_y), ds, 16, Color(C_WHITE, 0.45 * a))
+				_label(Vector2(col_x + 92.0, row_y), "%.1f秒" % float(lst[i]["t"]), 16, Color(tc, a), HORIZONTAL_ALIGNMENT_RIGHT)
+				_label(Vector2(col_x + 102.0, row_y), str(lst[i]["d"]), 16, Color(C_WHITE, 0.45 * a))   # 表示は月/日だけ（年は保存のみ）
 			else:
-				_label(Vector2(col_x + 82.0, row_y), "―", 16, Color(C_WHITE, 0.3 * a), HORIZONTAL_ALIGNMENT_RIGHT)
+				_label(Vector2(col_x + 92.0, row_y), "―", 16, Color(C_WHITE, 0.3 * a), HORIZONTAL_ALIGNMENT_RIGHT)
 		if fmod(t, 1.0) < 0.6 and a >= 1.0:
 			_label(Vector2(wx, 346), "PUSH START", 16, C_WHITE, HORIZONTAL_ALIGNMENT_CENTER)
 		return
