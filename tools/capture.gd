@@ -120,6 +120,9 @@ func _process(_d: float) -> void:
 		if main.fx_hit > 0.3 and main.fx_hit < 0.4 and not shots.has("hit"):
 			shots["hit"] = true
 			_snap("hit")
+		if main.hitstop > 0.0 and main.hitstop_frames == 1 and m.elapsed > 4.0 and not shots.has("hitstop"):
+			shots["hitstop"] = true
+			_snap("hitstop")
 		if main.fx_shout > 0.7 and not shots.has("shout"):
 			shots["shout"] = true
 			_snap("shout")

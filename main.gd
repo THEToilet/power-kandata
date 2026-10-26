@@ -316,6 +316,8 @@ var falling_ghosts: Array = []   # [pos, vel, rot]
 var falling_thread: Array = []   # [world_h, x, age]
 var popups: Array = []           # [text, world_h, x, age, color]
 var fx_shout := 0.0
+var hitstop := 0.0               # ヒットストップの残り時間（秒）
+var hitstop_frames := 0          # ヒットストップに入ってからのフレーム数（最初の数フレームだけ光らせる）
 var stomp_fx := 0.0              # 叫びの衝撃波（残り時間）
 const BLAST_TIME := 0.5
 var blast_at := Vector2.ZERO     # 衝撃波の中心（x: モデルpx, y: 高さ m）
@@ -554,10 +556,16 @@ func _panel_key(k: int) -> void:
 # ---------------------------------------------------------------- 更新
 
 func _process(delta: float) -> void:
-	t += delta
 	if panel_open:
 		queue_redraw()
 		return
+	# ヒットストップ: 叫んだ瞬間、世界を一瞬止める（揺れだけは続ける）
+	if hitstop > 0.0:
+		hitstop -= delta
+		hitstop_frames += 1
+		queue_redraw()
+		return
+	t += delta
 	phase_t += delta
 	fx_shout = maxf(0.0, fx_shout - delta)
 	stomp_fx = maxf(0.0, stomp_fx - delta)
@@ -742,6 +750,11 @@ func _on_shout(n_ghosts: int, from_x: float) -> void:
 	falling_thread.append([model.air_from, from_x, 0.0])
 	_drop_ghosts(n_ghosts, model.air_from, from_x, true)
 	stomp_fx = BLAST_TIME
+	# ヒットストップ: 踏み台が多いほど長く止まる。九死に一生はさらに長く
+	hitstop = minf(0.06 + 0.02 * model.last_stones, 0.16)
+	if model.last_clutch:
+		hitstop = 0.24
+	hitstop_frames = 0
 	blast_at = Vector2(from_x, model.air_from)
 	blast_px = model.blast_r
 
@@ -969,6 +982,8 @@ func _draw() -> void:
 			_draw_title()
 		elif phase == Phase.RESULT and phase_t > 0.9:
 			_draw_result()
+	if hitstop > 0.0 and hitstop_frames < 3:   # 止まった瞬間だけ画面を白く光らせる
+		draw_rect(Rect2(0, 0, FIELD_W, H), Color(1, 1, 1, 0.35 if hitstop_frames < 2 else 0.15))
 	if won and phase_t < 0.9:   # 到達の瞬間の白い光
 		var fa := 1.0 - absf(phase_t - 0.35) / 0.55
 		draw_rect(Rect2(0, 0, W, H), Color(1, 1, 0.95, clampf(fa, 0.0, 1.0)))
