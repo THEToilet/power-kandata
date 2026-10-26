@@ -297,7 +297,7 @@ enum Phase { TITLE, PLAY, RESULT }
 var model: ThreadModel = ThreadModel.new()
 var tuning: Dictionary = ThreadModel.DEFAULTS.duplicate()
 var course := 1
-var difficulty := 1              # 0 やさしい / 1 ふつう / 2 むずかしい
+var difficulty := 2              # 難易度は「むずかしい」だけ（選択はなくした。記録・ランキングもこの枠を使う）
 const DIFF_PATH := "user://difficulty.txt"
 const BEST_PATH := "user://records_v3.txt"   # 難易度ごとの最高到達（m）と、最速クリア（秒）
 var best := [0, 0, 0]              # 最高到達 m
@@ -373,7 +373,7 @@ func _ready() -> void:
 	_setup_pad()
 	_load_tuning()
 	if FileAccess.file_exists(DIFF_PATH):
-		difficulty = clampi(int(FileAccess.get_file_as_string(DIFF_PATH)), 0, 2)
+		pass   # 以前の難易度選択の保存は使わない
 	if FileAccess.file_exists(BEST_PATH):
 		var parts2 := FileAccess.get_file_as_string(BEST_PATH).split(",")
 		for k in range(mini(parts2.size(), 6)):
@@ -513,12 +513,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		panel_open = true
 	elif phase == Phase.TITLE and (k == KEY_SPACE or k == KEY_ENTER):
 		_restart()
-	elif phase == Phase.TITLE and (k == KEY_LEFT or k == KEY_A or k == KEY_RIGHT or k == KEY_D):
-		difficulty = clampi(difficulty + (-1 if (k == KEY_LEFT or k == KEY_A) else 1), 0, 2)
-		var f := FileAccess.open(DIFF_PATH, FileAccess.WRITE)
-		if f:
-			f.store_string(str(difficulty))
-		_new_model()
 	elif phase == Phase.RESULT and phase_t > 0.9 and (k == KEY_SPACE or k == KEY_ENTER):
 		course = randi_range(1, 999)   # 毎回ちがう地獄
 		_restart()
@@ -699,14 +693,15 @@ func _load_ranking() -> void:
 			var lst: Array = []
 			for e in data[k]:
 				if typeof(e) == TYPE_DICTIONARY and e.has("t"):
-					lst.append({"t": float(e["t"]), "d": str(e.get("d", ""))})
+					var yr: int = int(e.get("y", Time.get_date_dict_from_system().year))   # 年がない古い記録は今年とみなす
+					lst.append({"t": float(e["t"]), "d": str(e.get("d", "")), "y": yr})
 			ranking[k] = lst
 
 
 func _add_ranking(sec: float) -> void:
 	# クリアタイムを上位10件に入れる。速い順。同タイムは先に出した方が上
 	var dd := Time.get_date_dict_from_system()
-	var entry := {"t": snappedf(sec, 0.01), "d": "%02d/%02d" % [dd.month, dd.day]}
+	var entry := {"t": snappedf(sec, 0.01), "d": "%02d/%02d" % [dd.month, dd.day], "y": dd.year}
 	var lst: Array = ranking[difficulty]
 	var pos := lst.size()
 	for i in range(lst.size()):
@@ -1711,8 +1706,8 @@ func _draw_title() -> void:
 	var cx := W * 0.5
 	_label(Vector2(cx, 120), "パワーカンダタ（仮）", 32, C_GOLD, HORIZONTAL_ALIGNMENT_CENTER)
 	_spr(SPR_KANDATA, Vector2(cx, 172), {"s": C_SKIN, "h": C_HAIR, "k": C_BLACK, "m": C_RED, "c": C_CLOTH}, false, 3)
-	var dcol: Color = [C_GREEN, C_YELLOW, C_RED][difficulty]
-	_label(Vector2(cx, 240), "＜ %s ＞" % ThreadModel.DIFFICULTY_NAMES[difficulty], 16, dcol, HORIZONTAL_ALIGNMENT_CENTER)
+	if best_time[difficulty] > 0.0:
+		_label(Vector2(cx, 240), "BEST %.1f秒" % best_time[difficulty], 16, Color(C_WHITE, 0.6), HORIZONTAL_ALIGNMENT_CENTER)
 	if fmod(t, 1.0) < 0.6:
 		_label(Vector2(cx, 286), "PUSH START", 16, C_WHITE, HORIZONTAL_ALIGNMENT_CENTER)
 
@@ -1732,16 +1727,16 @@ func _draw_result() -> void:
 		# 景色を隠さないよう、上に小さく
 		var a := clampf((phase_t - 1.8) / 0.5, 0.0, 1.0)
 		var wx := W * 0.5
-		draw_rect(Rect2(wx - 170, 24, 340, 204), Color(C_BLACK, 0.6 * a))
+		draw_rect(Rect2(wx - 194, 24, 388, 204), Color(C_BLACK, 0.6 * a))
 		_label(Vector2(wx, 58), "極楽に到達！", 32, Color(C_YELLOW, a), HORIZONTAL_ALIGNMENT_CENTER)
 		_label(Vector2(wx, 82), "TIME %.1f   RANK %s" % [model.elapsed, _rank(model.elapsed)], 16, Color(C_WHITE, a), HORIZONTAL_ALIGNMENT_CENTER)
 		# 上位10件（左に1〜5位、右に6〜10位）。今回のタイムは点滅
-		_label(Vector2(wx, 106), "― %s ランキング ―" % ThreadModel.DIFFICULTY_NAMES[difficulty], 16, Color(C_GOLD, a), HORIZONTAL_ALIGNMENT_CENTER)
+		_label(Vector2(wx, 106), "― ランキング ―", 16, Color(C_GOLD, a), HORIZONTAL_ALIGNMENT_CENTER)
 		var lst: Array = ranking[difficulty]
 		# 1行 = 「順位」「タイム（秒・右そろえ）」「日付（薄く）」。左の列に1〜5位、右の列に6〜10位
 		draw_rect(Rect2(wx, 122, 1, 92), Color(C_WHITE, 0.25 * a))   # 列の仕切り
 		for i in range(RANKING_SIZE):
-			var col_x := wx - 150.0 if i < 5 else wx + 10.0
+			var col_x := wx - 172.0 if i < 5 else wx + 12.0
 			var row_y := 136.0 + float(i % 5) * 18.0
 			var is_new := i == new_rank
 			var blink := is_new and fmod(t, 0.4) < 0.28
@@ -1752,10 +1747,14 @@ func _draw_result() -> void:
 			_label(Vector2(col_x, row_y), "%d位" % (i + 1), 16, Color(rank_col, a))
 			if i < lst.size():
 				var tc: Color = (C_YELLOW if blink else C_ORANGE) if is_new else C_WHITE
-				_label(Vector2(col_x + 92.0, row_y), "%.1f秒" % float(lst[i]["t"]), 16, Color(tc, a), HORIZONTAL_ALIGNMENT_RIGHT)
-				_label(Vector2(col_x + 102.0, row_y), str(lst[i]["d"]), 16, Color(C_WHITE, 0.45 * a))
+				_label(Vector2(col_x + 82.0, row_y), "%.1f秒" % float(lst[i]["t"]), 16, Color(tc, a), HORIZONTAL_ALIGNMENT_RIGHT)
+				var ds := str(lst[i]["d"])
+				var this_year: int = Time.get_date_dict_from_system().year
+				if int(lst[i].get("y", this_year)) != this_year:   # 今年じゃない記録だけ年をつける
+					ds = "%d/%s" % [int(lst[i]["y"]), ds]
+				_label(Vector2(col_x + 88.0, row_y), ds, 16, Color(C_WHITE, 0.45 * a))
 			else:
-				_label(Vector2(col_x + 92.0, row_y), "―", 16, Color(C_WHITE, 0.3 * a), HORIZONTAL_ALIGNMENT_RIGHT)
+				_label(Vector2(col_x + 82.0, row_y), "―", 16, Color(C_WHITE, 0.3 * a), HORIZONTAL_ALIGNMENT_RIGHT)
 		if fmod(t, 1.0) < 0.6 and a >= 1.0:
 			_label(Vector2(wx, 346), "PUSH START", 16, C_WHITE, HORIZONTAL_ALIGNMENT_CENTER)
 		return
