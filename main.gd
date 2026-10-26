@@ -322,6 +322,7 @@ var hitstop_total := 0.0         # 直前のヒットストップの長さ
 var slowmo := 0.0                # スローモーションの残り（九死に一生）
 var invert_t := 0.0              # 白黒反転の残り（九死に一生の瞬間）
 var invert_rect: ColorRect
+var base_xf := Transform2D.IDENTITY   # 世界を描くときの変形（揺れ＋叫びのズーム）
 var blast_style := 5            # 叫びの衝撃波の見せ方 0=円 1=ギザギザ吹き出し 2=空間のゆがみ 3=砕けた音波 4=火の粉の輪 5=吹き出し＋ゆがみ
 var ripple_rect: ColorRect
 var shout_hold := 0.0            # 叫んだ直後にカメラを留める残り時間
@@ -589,11 +590,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.echo:
 		return
-	if k == KEY_B:   # 試し用: 叫びの衝撃波の見せ方を切り替える
-		blast_style = (blast_style + 1) % 6
-		tip_text = "叫びの見せ方: %s" % ["0 円", "1 ギザギザ吹き出し", "2 空間のゆがみ", "3 砕けた音波", "4 火の粉の輪", "5 吹き出し＋ゆがみ"][blast_style]
-		tip_t = 0.0
-	elif k == KEY_F1 or k == KEY_TAB:
+	if k == KEY_F1 or k == KEY_TAB:
 		panel_open = true
 	elif phase == Phase.TITLE and (k == KEY_SPACE or k == KEY_ENTER):
 		_restart()
@@ -887,7 +884,7 @@ func _draw_blast() -> void:
 			var shrink := clampf((bk - 0.55) / 0.45, 0.0, 1.0)
 			var rad := blast_px * 0.62 * (0.6 + 0.4 * (1.0 - pow(1.0 - pop, 3.0))) * (1.0 - 0.5 * shrink)
 			if rad > 4.0:
-				var n := 18
+				var n := 10
 				var rng := RandomNumberGenerator.new()
 				rng.seed = 7 + int(blast_at.y)
 				var outer := PackedVector2Array()
@@ -898,7 +895,11 @@ func _draw_blast() -> void:
 					outer.append(bc + Vector2(cos(ang), sin(ang)) * (r + 4.0))
 					inner.append(bc + Vector2(cos(ang), sin(ang)) * r)
 				var a := 1.0 - shrink
-				draw_colored_polygon(outer, Color(C_BLACK, a))
+				var glow := PackedVector2Array()
+				for v in outer:
+					glow.append(bc + (v - bc) * 1.12)
+				draw_colored_polygon(glow, Color(C_ORANGE, a * 0.35))      # 外側のぼんやりした光
+				draw_colored_polygon(outer, Color(C_GOLD if shout_clutch else C_ORANGE, a * 0.9))   # 縁は黒でなく橙
 				draw_colored_polygon(inner, Color(C_GOLD if shout_clutch else Color8(255, 246, 220), a))
 				var inner2 := PackedVector2Array()
 				for v in inner:
@@ -957,14 +958,14 @@ func _draw_shout_text(px: float, py: float) -> void:
 		var k := clampf((shout_age - i * 0.045) / 0.09, 0.0, 1.0)
 		if k > 0.0:
 			var sc := lerpf(4.0, sc_final, 1.0 - pow(1.0 - k, 3.0))   # 大きく出て縮む
-			var center := Vector2(x + cw * sc_final * 0.5, sy - 8.0 * sc_final * 0.5) + draw_off
+			var center := Vector2(x + cw * sc_final * 0.5, sy - 8.0 * sc_final * 0.5)
 			var p := (center / sc - Vector2(cw * 0.5, -6.0)).round()
-			draw_set_transform(Vector2.ZERO, 0.0, Vector2(sc, sc))
+			draw_set_transform_matrix(base_xf * Transform2D(0.0, Vector2(sc, sc), 0.0, Vector2.ZERO))
 			draw_string(font, p + Vector2(1, 1), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(C_BLOOD, alpha))
 			for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:
 				draw_string(font, p + o, ch, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(C_BLACK, alpha))
 			draw_string(font, p, ch, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(body if k >= 1.0 else C_WHITE, alpha))
-			draw_set_transform(draw_off)
+			draw_set_transform_matrix(base_xf)
 		x += cw * sc_final
 
 
@@ -1178,9 +1179,17 @@ func _draw() -> void:
 		if phase_t > 1.8:
 			_draw_result()
 	else:
-		draw_set_transform(draw_off)
+		# 叫んだ瞬間、カメラがぐっと寄ってから戻る（止まっている間は寄ったまま）
+		var z := 1.0
+		if shout_age < hitstop_total + 0.35 and phase == Phase.PLAY:
+			var f := 1.0 if shout_age < hitstop_total else 1.0 - smoothstep(0.0, 1.0, (shout_age - hitstop_total) / 0.35)
+			z = 1.0 + (0.14 if shout_clutch else 0.08) * f
+		var pivot := Vector2(_sx(blast_at.x), _sy(blast_at.y))
+		base_xf = Transform2D(0.0, Vector2(z, z), 0.0, draw_off + pivot * (1.0 - z))
+		draw_set_transform_matrix(base_xf)
 		_draw_world()
 		draw_off = Vector2.ZERO
+		base_xf = Transform2D.IDENTITY
 		draw_set_transform(Vector2.ZERO)
 		if fx_hit > 0.0 and fmod(t, 0.1) < 0.05:
 			draw_rect(Rect2(0, 0, FIELD_W, H), Color(C_RED, 0.25))
@@ -2104,11 +2113,11 @@ func _label(pos: Vector2, text: String, size: int, col: Color, align := HORIZONT
 	elif align == HORIZONTAL_ALIGNMENT_CENTER:
 		p.x -= roundf(tw * 0.5)
 	if sc > 1.0:
-		draw_set_transform(draw_off, 0.0, Vector2(sc, sc))
+		draw_set_transform_matrix(base_xf * Transform2D(0.0, Vector2(sc, sc), 0.0, Vector2.ZERO))
 		var lp := (p / sc).round()
 		draw_string(font, lp + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(C_BLACK, col.a))
 		draw_string(font, lp, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
-		draw_set_transform(draw_off)
+		draw_set_transform_matrix(base_xf)
 	else:
 		draw_string(font, p + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(C_BLACK, col.a))
 		draw_string(font, p, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, col)
