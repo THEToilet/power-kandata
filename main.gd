@@ -2198,8 +2198,6 @@ func _draw_title() -> void:
 	# 題字: 大きく、黒いふちと赤い影
 	_draw_logo(Vector2(cx, 58), "パワーカンダタ")
 	_label(Vector2(cx, 96), "― 蜘蛛の糸 ―", 16, Color(C_WHITE, 0.75), HORIZONTAL_ALIGNMENT_CENTER)
-	if best_time[difficulty] > 0.0:
-		_label(Vector2(W - 12, H - 30), "BEST %.1f秒" % best_time[difficulty], 16, Color(C_WHITE, 0.8), HORIZONTAL_ALIGNMENT_RIGHT)
 	if fmod(t, 1.0) < 0.65:
 		_label(Vector2(cx, 334), "PUSH START", 16, C_WHITE, HORIZONTAL_ALIGNMENT_CENTER)
 

@@ -198,7 +198,9 @@ func _generate_ahead() -> void:
 		obstacles.append({"type": "fire", "h": gen_fire_h, "cx": FIRE_LANES[lane], "lane": lane,
 				"r": FIRE_ORBIT, "w": rng.randf_range(1.6, 2.4) * (1.0 if rng.randf() < 0.5 else -1.0),
 				"phase": rng.randf() * TAU})
-		gen_fire_h += cfg.fire_gap * lerpf(1.3, 0.65, ramp(gen_fire_h)) * rng.randf_range(0.7, 1.3)
+		# 上ほど間隔が詰まる。後半（500m〜）はさらにもう一段詰めて、鬼火を増やす
+		var late := clampf((gen_fire_h - GOAL * 0.5) / (GOAL * 0.5), 0.0, 1.0)
+		gen_fire_h += cfg.fire_gap * lerpf(1.3, 0.65, ramp(gen_fire_h)) * lerpf(1.0, 0.7, late) * rng.randf_range(0.7, 1.3)
 	while gen_perch_h < minf(height + GEN_AHEAD, GOAL - 12.0):
 		var n := 1
 		if rng.randf() < 0.25 + 0.2 * ramp(gen_perch_h):   # ときどき2人組（上ほど多い）

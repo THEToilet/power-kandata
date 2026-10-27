@@ -73,7 +73,7 @@ func _process(_d: float) -> void:
 		if m.height > 280.0 and not shots.has("goal"):
 			shots["goal"] = true
 			_snap("goal")
-		for ts in [1.0, 3.0, 5.0, 6.0, 7.0, 7.6, 9.0, 16.0, 24.0]:
+		for ts in [1.0, 3.0, 5.0, 6.0, 7.0, 7.6, 9.0, 16.0, 24.0, 40.0, 50.0, 60.0]:
 			var key := "t%02d" % int(ts)
 			if m.elapsed >= ts and not shots.has(key):
 				shots[key] = true
