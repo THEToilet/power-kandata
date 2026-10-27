@@ -434,7 +434,8 @@ func _update_rocks(delta: float) -> void:
 			continue
 		r.state = 1
 		# カンダタに当たる
-		if not r.hit_player and invuln_left <= 0.0 and absf(r.h - (height + HEAD * 0.5)) < 2.5 \
+		# ジャンプ中（新しい糸をつかむまで）は無敵
+		if not r.hit_player and invuln_left <= 0.0 and state != State.AIR and absf(r.h - (height + HEAD * 0.5)) < 2.5 \
 				and absf(r.x - x) < ROCK_R + BODY_W:
 			r.hit_player = true
 			rock_hits += 1
@@ -475,7 +476,7 @@ func _update_lava(delta: float) -> void:
 
 
 func _check_fire() -> void:
-	if invuln_left > 0.0:
+	if invuln_left > 0.0 or state == State.AIR:   # ジャンプ中（新しい糸をつかむまで）は無敵
 		return
 	for o in obstacles:
 		if o.type != "fire":
