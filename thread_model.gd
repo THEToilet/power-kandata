@@ -265,8 +265,9 @@ func can_shout() -> bool:
 
 
 func drain_rate(climbing: bool, _dash := false) -> float:
-	# 罪人ぶんを除いた耐久度の減り（/秒）。何もしていなければ減らない
-	return cfg.climb_wear if climbing else 0.0
+	# 罪人ぶんを除いた耐久度の減り（/秒）。カンダタ一人なら糸は切れない（原作どおり）。
+	# 罪人がしがみついた状態で登ると、そのぶん糸がこすれて傷む
+	return cfg.climb_wear if climbing and ghosts >= 1.0 else 0.0
 
 
 func time_to_snap(climbing := true, _dash := false) -> float:

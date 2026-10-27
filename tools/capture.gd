@@ -88,6 +88,15 @@ func _process(_d: float) -> void:
 		if OS.get_cmdline_user_args().has("snap") and m.durability <= 0.0: inp[1] = false
 		if OS.get_cmdline_user_args().has("idle") and m.elapsed < 9.0:   # 出だしで止まって、マグマの上がり方を見る
 			inp = [false, false, 0.0, false]
+		if OS.get_cmdline_user_args().has("nope") and m.ghosts < 1.0 and m.elapsed > 0.8 and m.state == ThreadModel.State.CLIMBING and not shots.has("nope_go"):
+			shots["nope_go"] = true
+			main.ring_nope = main.NOPE_TIME   # 踏み台なしで叫んだときの見た目だけを出す
+		if main.ring_nope > 0.0:
+			for nk in [0.6, 0.45, 0.3]:
+				var kk := "nope_%d" % int(nk * 100)
+				if main.ring_nope <= nk and not shots.has(kk):
+					shots[kk] = true
+					_snap(kk)
 		main.bot_climb = inp[0]
 		main.bot_shout = inp[1] and pend_key == ""
 		main.bot_swing = inp[2]

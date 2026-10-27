@@ -335,6 +335,7 @@ var blast_at := Vector2.ZERO     # 衝撃波の中心（x: モデルpx, y: 高�
 var blast_px := 0.0              # 衝撃波の半径（画面px）
 const C_SILK := Color8(226, 224, 236)   # 蜘蛛の糸の色
 var ring_nope := 0.0
+const NOPE_TIME := 0.7
 var anim_h := 0.0                # 登りモーション用: 前のフレームの高さ
 var climb_phase := 0.0           # 登った距離で進むモーションの位相
 var climb_moving := 0.0          # 登っている最中なら 1（少し余韻を残す）
@@ -842,7 +843,8 @@ func _process(delta: float) -> void:
 		early_t = maxf(0.0, early_t - delta)
 		if shout and model.state == ThreadModel.State.CLIMBING and not model.can_shout() and early_t <= 0.0:
 			early_t = 0.6
-			ring_nope = 0.4   # 踏み台がいないときは、○ゲージが首を振るだけ
+			ring_nope = NOPE_TIME   # 踏み台がいない: ゲージが震え、足元に「誰もいない」影が点滅する
+			_burst(Vector2(_sx(model.x), _player_sy() - 6.0), 6, [Color(C_GREY, 0.8), Color(C_WHITE, 0.5)], 25.0, 2.0, 0.4, -20.0)   # 口から、しょぼい息だけ
 			_se("se_nope")
 		var shouts_before := model.shouts
 		var hits_before := model.hits
@@ -1650,7 +1652,15 @@ func _draw_world() -> void:
 				break
 			var side := g % 2 == 0
 			_spr(SPR_GHOST, Vector2(_gx(model.x, g + 3) + (8.0 if side else -8.0), gy), _ghost_pal(g), not side)
-		# ○ゲージは頭の上、天へ伸びる糸の上に付ける
+		# 踏み台がいないのに叫んだ: 本来罪人がいるはずの足元に、白い影を点滅させる（「ここに誰かいれば跳べる」）
+		if ring_nope > 0.0 and int(model.ghosts) == 0:
+			var na := 0.55 if fmod(ring_nope, 0.2) > 0.1 else 0.2
+			na *= clampf(ring_nope / 0.25, 0.0, 1.0)
+			var nc := Color(C_WHITE, na)
+			var gp0 := Vector2(_gx(model.x, 3) + 8.0, py + 46.0)
+			draw_line(hand, gp0 + Vector2(0, -8), Color(C_WHITE, na * 0.6), 1.0)
+			_spr(SPR_GHOST, gp0, {"s": nc, "h": nc, "k": nc, "m": nc, "c": nc}, false, 3)
+		# 耐久ゲージは頭の上、天へ伸びる糸の上に付ける
 		var top_pt := thread_top
 		var ring_c := (hand + (top_pt - hand).normalized() * 20.0).round()
 		_draw_frayed_thread(hand, top_pt)
