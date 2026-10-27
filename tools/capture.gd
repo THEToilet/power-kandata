@@ -13,6 +13,9 @@ var margin := 1.0
 var want_panel := false
 var shots := {}
 var quick := false
+var pend_key := ""
+var pend_lv := 0.0
+var pend_n := 0
 
 
 func _ready() -> void:
@@ -57,7 +60,26 @@ func _process(_d: float) -> void:
 		get_tree().quit()
 		return
 	var m = main.model
-	if main.phase == main.Phase.PLAY and not main.panel_open:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("gauge="):
+			if pend_key != "":
+				m.durability = ThreadModel.DURABILITY_MAX * pend_lv   # 撮るまで値を保つ
+				pend_n -= 1
+				if pend_n <= 0:
+					_snap(pend_key)
+					shots[pend_key] = true
+					pend_key = ""
+					if pend_lv < 0.1:
+						get_tree().quit()
+						return
+			elif main.phase == main.Phase.PLAY and m.elapsed > 9.0 and m.state == ThreadModel.State.CLIMBING and m.ghosts >= 2.0 and main.shout_age > 1.2:
+				for lv in [0.8, 0.4, 0.08]:
+					var key := "g_%d" % int(lv * 100)
+					if not shots.has(key):
+						pend_key = key
+						pend_lv = lv
+						pend_n = 3
+						break
 		if OS.get_cmdline_user_args().has("snap") and m.elapsed > 10.0 and m.ghosts >= 1.0 and m.state == ThreadModel.State.CLIMBING:
 			m.durability = 0.0   # 糸切れ演出の確認用
 		if OS.get_cmdline_user_args().has("nolava"):   # クリア演出の確認用: マグマを遠ざける
@@ -67,7 +89,7 @@ func _process(_d: float) -> void:
 		if OS.get_cmdline_user_args().has("idle") and m.elapsed < 9.0:   # 出だしで止まって、マグマの上がり方を見る
 			inp = [false, false, 0.0, false]
 		main.bot_climb = inp[0]
-		main.bot_shout = inp[1]
+		main.bot_shout = inp[1] and pend_key == ""
 		main.bot_swing = inp[2]
 		main.bot_dash = inp[3]
 		if m.height > 280.0 and not shots.has("goal"):

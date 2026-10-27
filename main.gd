@@ -1653,6 +1653,7 @@ func _draw_world() -> void:
 		# ○ゲージは頭の上、天へ伸びる糸の上に付ける
 		var top_pt := thread_top
 		var ring_c := (hand + (top_pt - hand).normalized() * 20.0).round()
+		_draw_frayed_thread(hand, top_pt)
 		_draw_ring(ring_c, snap)
 
 	# 叫びの衝撃波（見せ方は blast_style で切り替え）
@@ -2024,25 +2025,45 @@ func _draw_meadow() -> void:
 	_spr(SPR_PEDESTAL, bud + Vector2(0, 38), {"p": Color8(226, 110, 150), "P": Color8(250, 196, 214), "g": C_GRASS_D}, false, 3)
 
 
-func _draw_ring(c: Vector2, snap: float) -> void:
-	# 糸の耐久度を、糸に付いた○ゲージで表す
+func _draw_ring(c: Vector2, _snap: float) -> void:
+	# 糸の耐久ゲージ: 頭上の糸に付いた横棒。色は残量で 緑→黄→赤
 	var r := model.durability / ThreadModel.DURABILITY_MAX
 	var col := C_GREEN
-	if snap < 3.0:
+	if r <= 0.5:
 		col = C_YELLOW
-	if snap < 1.3:
+	if r <= 0.25:
 		col = C_RED
-	draw_circle(c, 9.0, C_BLACK)
-	draw_arc(c, 6.0, 0, TAU, 24, Color(C_WHITE, 0.2), 3.0)
-	if r > 0.0:
-		draw_arc(c, 6.0, -PI * 0.5, -PI * 0.5 + TAU * r, 24, col, 3.0)
-	if ring_nope > 0.0:   # 踏み台がいないのに叫んだ: ○が左右に震える
+	if ring_nope > 0.0:   # 踏み台がいないのに叫んだ: 棒が左右に震える
 		c.x += roundf(sin(ring_nope * 60.0) * 2.0)
-	if snap < 1.5:   # 切れそう: 赤く脈打つ
-		col = C_RED if fmod(t, 0.3) < 0.18 else C_YELLOW
-		draw_arc(c, 11.0 + roundf(absf(sin(t * 12.0)) * 2.0), 0, TAU, 24, col, 1.0)
-		if model.can_shout():
-			_label(Vector2(c.x + 14, c.y + 6), "叫べ！", 16, col)
+	var bw := 26.0
+	var x0 := roundf(c.x - bw * 0.5)
+	var y0 := roundf(c.y - 2.0)
+	draw_rect(Rect2(x0 - 2, y0 - 2, bw + 4, 8), C_BLACK)   # 黒い縁で、どの背景でも浮かせる
+	draw_rect(Rect2(x0, y0, bw, 4), Color(C_WHITE, 0.18))
+	if r > 0.0:
+		draw_rect(Rect2(x0, y0, maxf(1.0, roundf(bw * r)), 4), col)
+
+
+func _draw_frayed_thread(hand: Vector2, top: Vector2) -> void:
+	# 頭上の糸そのものが、傷むほど細く・赤く・ほつれていく。九死に一生の圏内（切れかけ）では、ところどころ途切れて見える
+	var r := model.durability / ThreadModel.DURABILITY_MAX
+	var dir := (top - hand).normalized()
+	var a := hand + dir * 4.0
+	var b := hand + dir * 70.0
+	var w := 3.0 if r > 0.6 else (2.0 if r > 0.3 else 1.0)
+	var col := C_SILK.lerp(C_RED, clampf(1.0 - r, 0.0, 1.0) * 0.8)
+	draw_line(a, b, col, w)
+	var n := int((1.0 - r) * 14.0)   # ほつれた繊維（傷むほど増える）
+	for k in range(n):
+		var f := fmod(k * 0.37 + 0.1, 1.0)
+		var p := a.lerp(b, f).round()
+		var sgn := 1.0 if k % 2 == 0 else -1.0
+		var l := 2.0 + float(k % 3) + (1.0 - r) * 3.0
+		draw_line(p, p + Vector2(sgn * l, -l * 0.6 + sin(t * 6.0 + k) * 1.5).round(), Color(col, 0.85), 1.0)
+	if model.is_clutch() and fmod(t, 0.3) < 0.15:
+		for k in range(3):
+			var p2 := a.lerp(b, 0.25 + k * 0.25).round()
+			draw_rect(Rect2(p2.x - 2, p2.y - 1, 5, 3), C_BLACK)
 
 
 func _ghost_pal(i: int) -> Dictionary:
