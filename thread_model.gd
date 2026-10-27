@@ -217,8 +217,8 @@ func lava_speed() -> float:
 func fire_pos(o: Dictionary) -> Vector2:
 	# 鬼火の今の位置（x は px、y は高さ m）
 	var a: float = elapsed * o.w * cfg.fire_speed + o.phase
-	if int(cfg.fire_mode) % 2 == 0:   # 円: 画面上で丸く見えるよう、高さ方向は px→m に換算
-		return Vector2(o.cx + o.r * cos(a), o.h + o.r * 0.5 / 3.5 * sin(a))
+	if int(cfg.fire_mode) % 2 == 0:   # 円: 画面に描く円（半径 r×0.7 ドット）の上をぴったり回るよう、高さ方向も同じ半径に換算（0.7=横の縮尺, 3.5=1mのドット）
+		return Vector2(o.cx + o.r * cos(a), o.h + o.r * 0.7 / 3.5 * sin(a))
 	return Vector2(o.cx, o.h + 7.0 * sin(a))   # 波: 上下に ±7m
 
 
