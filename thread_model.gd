@@ -7,7 +7,7 @@ extends RefCounted
 
 # 調整パネル（F1）で変えられる値。高さは m、横位置は px
 const DEFAULTS := {
-	"climb_speed": 6.0,      # 登る速さ（m/秒）
+	"climb_speed": 14.0,     # 登る速さ（m/秒）。開発中に調整パネルで決めた値（14）を標準にした
 	"climb_wear": 3.0,       # 登っている間の糸の傷み（/秒）
 	"sinner_gap_low": 10.0,  # 崖の罪人の間隔・低いところ（m）
 	"sinner_gap_high": 10.0, # 崖の罪人の間隔・高いところ（m）

@@ -18,6 +18,8 @@ const MAP_TOP := 34.0
 const MAP_BOT := 330.0
 const PANEL_X := 640.0
 const TUNING_PATH := "user://tuning_v2.json"   # 標準から変えた値だけ保存する
+# 開発用の機能（F1/TAB の調整パネル、保存した調整値の読み込み、プレイ中の R/N リスタート）。公開版は false
+const DEV_TOOLS := false
 
 # ---- パレット（地獄っぽい少色）
 const C_BLACK := Color8(14, 8, 14)
@@ -401,6 +403,7 @@ const WIN_ROW_STEP := 0.12      # 1行ずつの間隔
 const WIN_READY := WIN_ROW_AT + WIN_ROW_STEP * 10 + 0.5   # これより前はリトライ不可
 var go_jingled := false
 var panel_open := false
+var credits_open := false
 var panel_sel := 0
 var draw_off := Vector2.ZERO     # 画面揺れのオフセット（文字の拡大描画で使う）
 
@@ -432,7 +435,8 @@ func _ready() -> void:
 		sf.font_names = PackedStringArray(["Yu Gothic UI", "Meiryo", "Noto Sans CJK JP"])
 		font = sf
 	_setup_pad()
-	_load_tuning()
+	if DEV_TOOLS:
+		_load_tuning()   # 公開版では保存した調整値を読まない（誰が遊んでも同じバランス）
 	if FileAccess.file_exists(DIFF_PATH):
 		pass   # 以前の難易度選択の保存は使わない
 	if FileAccess.file_exists(BEST_PATH):
@@ -748,16 +752,22 @@ func _pad_to_key(b: int) -> int:
 		return KEY_LEFT
 	if phase == Phase.TITLE and b == JOY_BUTTON_DPAD_RIGHT:
 		return KEY_RIGHT
+	if credits_open:
+		return KEY_ESCAPE   # クレジットはどのボタンでも閉じる
 	match b:
 		JOY_BUTTON_START:
-			return KEY_SPACE if phase == Phase.TITLE else KEY_F1
-		JOY_BUTTON_A:
-			if phase == Phase.TITLE:
+			if phase == Phase.TITLE or phase == Phase.RESULT:
 				return KEY_SPACE
-			if phase == Phase.RESULT:
-				return KEY_R
-		JOY_BUTTON_Y: return KEY_R
-		JOY_BUTTON_X: return KEY_N
+			return KEY_F1 if DEV_TOOLS else KEY_NONE
+		JOY_BUTTON_A:
+			if phase == Phase.TITLE or phase == Phase.RESULT:
+				return KEY_SPACE
+		JOY_BUTTON_Y:
+			if phase == Phase.TITLE:
+				return KEY_C   # クレジット
+			return KEY_R if DEV_TOOLS else KEY_NONE
+		JOY_BUTTON_X:
+			return KEY_N if DEV_TOOLS else KEY_NONE
 	return KEY_NONE
 
 
@@ -778,8 +788,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.echo:
 		return
-	if k == KEY_F1 or k == KEY_TAB:
+	if credits_open:
+		credits_open = false   # どのキーでも閉じる
+		return
+	if DEV_TOOLS and (k == KEY_F1 or k == KEY_TAB):
 		panel_open = true
+	elif phase == Phase.TITLE and k == KEY_C:
+		credits_open = true
 	elif k == KEY_M:   # 音のオン・オフ
 		AudioServer.set_bus_mute(0, not AudioServer.is_bus_mute(0))
 	elif phase == Phase.TITLE and (k == KEY_SPACE or k == KEY_ENTER):
@@ -791,9 +806,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		course = randi_range(1, 999)   # 毎回ちがう地獄
 		_se("se_start")
 		_restart()
-	elif k == KEY_R and phase != Phase.TITLE:
+	elif DEV_TOOLS and k == KEY_R and phase != Phase.TITLE:
 		_restart()
-	elif k == KEY_N and phase != Phase.TITLE:
+	elif DEV_TOOLS and k == KEY_N and phase != Phase.TITLE:
 		course = randi_range(1, 999)
 		_restart()
 
@@ -2280,6 +2295,37 @@ func _draw_title() -> void:
 	_label(Vector2(cx, 96), "― 蜘蛛の糸 ―", 16, Color(C_WHITE, 0.75), HORIZONTAL_ALIGNMENT_CENTER)
 	if fmod(t, 1.0) < 0.65:
 		_label(Vector2(cx, 334), "PUSH START", 16, C_WHITE, HORIZONTAL_ALIGNMENT_CENTER)
+	_label(Vector2(8, H - 8), "C : CREDITS", 16, Color(C_WHITE, 0.45))
+	if credits_open:
+		_draw_credits()
+
+
+func _draw_credits() -> void:
+	# ライセンス表記（全文は同梱の LICENSES.txt）
+	draw_rect(Rect2(0, 0, W, H), Color(C_BLACK, 0.96))
+	var cx := W * 0.5
+	_label(Vector2(cx, 40), "CREDITS", 16, C_GOLD, HORIZONTAL_ALIGNMENT_CENTER)
+	var lines := [
+		["パワーカンダタ", C_YELLOW],
+		["原案  芥川龍之介「蜘蛛の糸」", C_WHITE],
+		["", C_WHITE],
+		["Font: DotGothic16", C_WHITE],
+		["(c) 2020 The DotGothic16 Project Authors", Color(C_WHITE, 0.7)],
+		["SIL Open Font License 1.1", Color(C_WHITE, 0.7)],
+		["", C_WHITE],
+		["Made with Godot Engine", C_WHITE],
+		["(c) 2014-present Godot Engine contributors", Color(C_WHITE, 0.7)],
+		["(c) 2007-2014 Juan Linietsky, Ariel Manzur", Color(C_WHITE, 0.7)],
+		["MIT License", Color(C_WHITE, 0.7)],
+		["", C_WHITE],
+		["ライセンス全文は LICENSES.txt に同梱", Color(C_WHITE, 0.55)],
+	]
+	var y := 74.0
+	for ln in lines:
+		_label(Vector2(cx, y), ln[0], 16, ln[1], HORIZONTAL_ALIGNMENT_CENTER)
+		y += 19.0
+	if fmod(t, 1.0) < 0.65:
+		_label(Vector2(cx, H - 14), "PUSH ANY KEY", 16, Color(C_WHITE, 0.8), HORIZONTAL_ALIGNMENT_CENTER)
 
 
 func _draw_logo(center: Vector2, text: String) -> void:

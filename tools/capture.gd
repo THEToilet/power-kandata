@@ -47,6 +47,12 @@ func _snap(n: String) -> void:
 
 func _process(_d: float) -> void:
 	frame += 1
+	if OS.get_cmdline_user_args().has("credits"):
+		if frame == 12:
+			main.credits_open = true
+		if frame == 16:
+			_snap("credits")
+			main.credits_open = false
 	if frame == 20:
 		_snap("00_title")
 		main.course = course
