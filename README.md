@@ -42,6 +42,7 @@
 | `thread_model.gd` | ゲームのルール（糸、罪人、跳躍、障害物、マグマ） |
 | `sim_test.gd` | ボットを走らせてバランスを確認する（`godot --headless --path . -s sim_test.gd`） |
 | `tools/capture.gd` | ボットに自動プレイさせてスクリーンショットを撮る |
+| `tools/promo_rec.gd` | ボットのプレイを Godot のムービーメーカーで録画する（宣伝動画の素材） |
 | `tools/make_audio.py` | BGM・効果音を合成して `audio/` に書き出す（numpy / scipy） |
 | `run_game.bat` / `open_editor.bat` | Windows 用の起動スクリプト。Godot の場所を `godot_path.txt` に1行で書いておく（git には入らない） |
 

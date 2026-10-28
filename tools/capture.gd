@@ -32,6 +32,13 @@ func _ready() -> void:
 	main.autopilot = true
 
 
+func _has_arg_prefix(pre: String) -> bool:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with(pre):
+			return true
+	return false
+
+
 func _snap(n: String) -> void:
 	get_viewport().get_texture().get_image().save_png(outdir + "/" + n + ".png")
 	print("saved ", n)
@@ -58,8 +65,8 @@ func _process(_d: float) -> void:
 		get_tree().quit()
 		return
 	var m = main.model
-	for a in OS.get_cmdline_user_args():
-		if a.begins_with("gauge="):
+	if main.phase == main.Phase.PLAY and not main.panel_open:
+		if _has_arg_prefix("gauge="):   # 糸の耐久 80/40/8% の見え方を撮る
 			if pend_key != "":
 				m.durability = ThreadModel.DURABILITY_MAX * pend_lv   # 撮るまで値を保つ
 				pend_n -= 1
