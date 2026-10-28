@@ -447,6 +447,16 @@ def se_heart():
     return sine(55 * (1 + 0.5 * np.exp(-t * 30)), t) * decay(len(t), 0.06)
 
 
+def se_whiff():
+    """空振りの蹴り: 短い「ヒュッ」"""
+    t = tl(0.18)
+    n = len(t)
+    a = np.sin(np.pi * np.clip(t / 0.18, 0, 1)) ** 1.5
+    f = 2400 * np.exp(-t * 8) + 600
+    sw = bp(noise(n), 700, 3500) * a
+    return sw * 0.9 + sine(f, t) * a * 0.08
+
+
 def se_rumble():
     """マグマの地鳴り（2秒ループ）"""
     sec = 2.0
@@ -486,3 +496,4 @@ if __name__ == "__main__":
     save("se_nope", se_nope(), 0.45)
     save("se_heart", se_heart(), 0.8)
     save("se_rumble", se_rumble(), 0.8)
+    save("se_whiff", se_whiff(), 0.5)   # 追加分は最後に（乱数の順番を変えず、既存の音を作り直しても同じになるように）

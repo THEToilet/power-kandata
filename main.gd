@@ -87,6 +87,43 @@ const SPR_KANDATA_JUMP := [
 	".ss......ss.",
 	"............",
 ]
+# 蹴落とし: ためて（両ひざを引き上げる）→ 片足で真下を踏みつける
+const SPR_KANDATA_KICK_A := [
+	".....ss.....",
+	"....s..s....",
+	"...shhhhs...",
+	"..hhhhhhhh..",
+	"..hhhhhhhh..",
+	"..hssssssh..",
+	"..sksssksh..",
+	"..ssssssss..",
+	"...smmmms...",
+	"..cccccccc..",
+	"..cccccccc..",
+	"..sccccccs..",
+	"..ss....ss..",
+	"............",
+	"............",
+	"............",
+]
+const SPR_KANDATA_KICK_B := [
+	".....ss.....",
+	"....s..s....",
+	"...shhhhs...",
+	"..hhhhhhhh..",
+	"..hhhhhhhh..",
+	"..hssssssh..",
+	"..sksssksh..",
+	"..ssssssss..",
+	"...smmmms...",
+	"..cccccccc..",
+	"..cccccccc..",
+	"...ccccccss.",
+	"...cc....s..",
+	"...ss.......",
+	"...ss.......",
+	"...sss......",
+]
 # 登りのモーション: 左手を上へ伸ばし、右手は腰で糸を握る。右足を引き上げる（左右反転で逆の手足）
 const SPR_KANDATA_REACH := [
 	".....ss.....",
@@ -336,6 +373,7 @@ var blast_px := 0.0              # 衝撃波の半径（画面px）
 const C_SILK := Color8(226, 224, 236)   # 蜘蛛の糸の色
 var ring_nope := 0.0
 const NOPE_TIME := 0.7
+const KICK_TIME := 0.24    # 蹴りのポーズを見せる長さ
 var anim_h := 0.0                # 登りモーション用: 前のフレームの高さ
 var climb_phase := 0.0           # 登った距離で進むモーションの位相
 var climb_moving := 0.0          # 登っている最中なら 1（少し余韻を残す）
@@ -511,7 +549,7 @@ func _restart() -> void:
 const SND_NAMES := ["bgm_title", "bgm_play", "bgm_heaven", "jingle_clear", "jingle_gameover",
 		"se_shout", "se_shout_clutch", "se_kick", "se_catch", "se_grab", "se_snap", "se_fall",
 		"se_hit_fire", "se_hit_rock", "se_burn", "se_throw", "se_warn", "se_leap", "se_start",
-		"se_tick", "se_rank_new", "se_nope", "se_heart", "se_rumble"]
+		"se_tick", "se_rank_new", "se_nope", "se_heart", "se_rumble", "se_whiff"]
 const SND_LOOP := ["bgm_title", "bgm_play", "bgm_heaven", "se_rumble"]
 # 音ごとの音量（dB）。うるさい・小さいと感じたらここをいじる
 const SND_VOL := {
@@ -519,7 +557,7 @@ const SND_VOL := {
 	"se_shout": -2.0, "se_shout_clutch": 0.0, "se_kick": -9.0, "se_catch": -16.0, "se_grab": -9.0,
 	"se_snap": -1.0, "se_fall": -7.0, "se_hit_fire": -3.0, "se_hit_rock": -4.0, "se_burn": -8.0,
 	"se_throw": -10.0, "se_warn": -11.0, "se_leap": -16.0, "se_start": -5.0, "se_tick": -12.0,
-	"se_rank_new": -4.0, "se_nope": -10.0, "se_heart": -3.0,
+	"se_rank_new": -4.0, "se_nope": -10.0, "se_heart": -3.0, "se_whiff": -6.0,
 }
 var snd := {}
 var bgm_player: AudioStreamPlayer
@@ -843,9 +881,8 @@ func _process(delta: float) -> void:
 		early_t = maxf(0.0, early_t - delta)
 		if shout and model.state == ThreadModel.State.CLIMBING and not model.can_shout() and early_t <= 0.0:
 			early_t = 0.6
-			ring_nope = NOPE_TIME   # 踏み台がいない: ゲージが震え、足元に「誰もいない」影が点滅する
-			_burst(Vector2(_sx(model.x), _player_sy() - 6.0), 6, [Color(C_GREY, 0.8), Color(C_WHITE, 0.5)], 25.0, 2.0, 0.4, -20.0)   # 口から、しょぼい息だけ
-			_se("se_nope")
+			ring_nope = NOPE_TIME   # 踏み台がいない: 下を蹴っても空振り。ゲージが震える
+			_se("se_whiff")   # 足は空を切るだけ
 		var shouts_before := model.shouts
 		var hits_before := model.hits
 		var rocks_before := model.rock_hits
@@ -1652,14 +1689,14 @@ func _draw_world() -> void:
 				break
 			var side := g % 2 == 0
 			_spr(SPR_GHOST, Vector2(_gx(model.x, g + 3) + (8.0 if side else -8.0), gy), _ghost_pal(g), not side)
-		# 踏み台がいないのに叫んだ: 本来罪人がいるはずの足元に、白い影を点滅させる（「ここに誰かいれば跳べる」）
-		if ring_nope > 0.0 and int(model.ghosts) == 0:
-			var na := 0.55 if fmod(ring_nope, 0.2) > 0.1 else 0.2
-			na *= clampf(ring_nope / 0.25, 0.0, 1.0)
-			var nc := Color(C_WHITE, na)
-			var gp0 := Vector2(_gx(model.x, 3) + 8.0, py + 46.0)
-			draw_line(hand, gp0 + Vector2(0, -8), Color(C_WHITE, na * 0.6), 1.0)
-			_spr(SPR_GHOST, gp0, {"s": nc, "h": nc, "k": nc, "m": nc, "c": nc}, false, 3)
+		# 空振り: 蹴った足の先で、何もない空を切る「ヒュッ」という弧
+		var nt := NOPE_TIME - ring_nope
+		if ring_nope > 0.0 and nt > 0.06 and nt < 0.36 and int(model.ghosts) == 0:
+			var foot := Vector2(_sx(model.x) - 5.0, py + 20.0)
+			var wa := 1.0 - (nt - 0.06) / 0.3
+			for k in range(3):
+				var wr := 6.0 + k * 4.0 + (nt - 0.06) * 30.0
+				draw_arc(foot, wr, PI * 0.15, PI * 0.85, 10, Color(C_WHITE, wa * (0.8 - k * 0.22)), 1.0)
 		# 耐久ゲージは頭の上、天へ伸びる糸の上に付ける
 		var top_pt := thread_top
 		var ring_c := (hand + (top_pt - hand).normalized() * 20.0).round()
@@ -2091,6 +2128,18 @@ func _draw_kandata(p: Vector2) -> void:
 	if model.stun_left > 0.0:
 		pal["s"] = Color8(250, 140, 120)
 	var lean := clampf(model.vx * 0.01, -4.0, 4.0)
+	# 蹴り: 叫んだ直後（罪人を蹴落とす）と、踏み台がいないのに叫んだとき（空振り）
+	var kick_t := -1.0
+	if shout_age < KICK_TIME and model.state != ThreadModel.State.TORN:
+		kick_t = shout_age
+	elif ring_nope > 0.0 and model.state == ThreadModel.State.CLIMBING:
+		kick_t = NOPE_TIME - ring_nope
+	if kick_t >= 0.0 and kick_t < KICK_TIME:
+		if kick_t < 0.06:
+			_spr(SPR_KANDATA_KICK_A, Vector2(p.x, p.y - 2.0), pal)   # ためる
+		else:
+			_spr(SPR_KANDATA_KICK_B, Vector2(p.x, p.y + 2.0), pal)   # 真下へ踏みつける
+		return
 	if model.state == ThreadModel.State.TORN:   # 落ちていく: 手足をばたつかせる
 		_spr(SPR_KANDATA_JUMP, Vector2(p.x, p.y), pal, int(fall_t * 8.0) % 2 == 1)
 		return

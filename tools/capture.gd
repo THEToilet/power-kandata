@@ -92,7 +92,7 @@ func _process(_d: float) -> void:
 			shots["nope_go"] = true
 			main.ring_nope = main.NOPE_TIME   # 踏み台なしで叫んだときの見た目だけを出す
 		if main.ring_nope > 0.0:
-			for nk in [0.6, 0.45, 0.3]:
+			for nk in [0.66, 0.6, 0.5]:
 				var kk := "nope_%d" % int(nk * 100)
 				if main.ring_nope <= nk and not shots.has(kk):
 					shots[kk] = true
