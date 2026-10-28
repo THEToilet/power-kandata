@@ -6,6 +6,12 @@
 しがみついてくる罪人たちを **叫んで蹴落とし、踏み台にして跳ぶ**。
 溜めるほど高く跳べるけれど、大勢ぶら下がるほど糸は傷んで切れやすくなる……というチキンレースです。
 
+**▶ ブラウザで遊ぶ: https://thetoilet.github.io/power-kandata/**
+
+- PC のブラウザ向けです（キーボードかゲームパッド）。スマホのタッチ操作には対応していません。
+- ゲーム本体が約 40MB あるので、初回は読み込みに少し時間がかかります。
+- 記録（ランキング）は遊んだブラウザの中だけに保存されます。どこにも送信しません。
+
 ## 遊び方
 
 | 操作 | キーボード | パッド |
@@ -27,6 +33,8 @@
 
 - エンジン: [Godot](https://godotengine.org/) 4.6.3
 - 絵はすべてコードで描いたドット絵、音は `tools/make_audio.py` で合成しています（外部素材なし）。
+- 開発には Claude（Anthropic の AI）を使っています。
+- Web 版は `docs/` に書き出しています（Godot の書き出しプリセット「Web」、GitHub Pages で公開）。
 
 | ファイル | 中身 |
 | --- | --- |
@@ -41,5 +49,6 @@
 
 ## ライセンス
 
+- このゲームのコード・音・絵: [MIT License](LICENSE)（フォントを除く）
 - フォント `fonts/DotGothic16-Regular.ttf`: © 2020 The DotGothic16 Project Authors — [SIL Open Font License 1.1](fonts/OFL.txt)。フォントはこのライセンスのまま配布しています。
 - Godot Engine: MIT License。書き出した版（Web など）に含まれる Godot 本体と内部コンポーネントのライセンス全文は `LICENSES.txt` にあります。
