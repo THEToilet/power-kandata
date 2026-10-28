@@ -64,7 +64,7 @@ const DIFFICULTY_NAMES := ["やさしい", "ふつう", "むずかしい"]
 const DIFFICULTY_PRESETS := [
 	{"lava_speed": 4.5, "lava_accel": 0.15, "rock_interval": 3.2, "fire_gap": 80.0, "hazard_damage": 18.0, "climb_wear": 2.5, "sinner_gap_low": 8.0, "sinner_gap_high": 8.0},
 	{},
-	{"lava_speed": 7.0, "lava_accel": 0.3, "rock_interval": 1.8, "fire_gap": 48.0, "hazard_damage": 30.0, "climb_wear": 4.0, "sinner_gap_low": 12.0, "sinner_gap_high": 12.0},
+	{"lava_speed": 7.0, "lava_accel": 0.3, "rock_interval": 1.1, "fire_gap": 30.0, "hazard_damage": 30.0, "climb_wear": 4.0, "sinner_gap_low": 12.0, "sinner_gap_high": 12.0},
 ]
 
 const GOAL := 1000.0          # 極楽（ここに着いたらクリア）

@@ -404,6 +404,7 @@ const WIN_READY := WIN_ROW_AT + WIN_ROW_STEP * 10 + 0.5   # これより前は�
 var go_jingled := false
 var panel_open := false
 var credits_open := false
+var shout_armed := false   # スタートに使ったボタンを離したら true（それまで叫ばない）
 var panel_sel := 0
 var draw_off := Vector2.ZERO     # 画面揺れのオフセット（文字の拡大描画で使う）
 
@@ -544,6 +545,7 @@ func _restart() -> void:
 	shake = 0.0
 	fall_t = 0.0
 	go_jingled = false
+	shout_armed = false
 	phase = Phase.PLAY
 	phase_t = 0.0
 
@@ -887,6 +889,13 @@ func _process(delta: float) -> void:
 		# 左スティックは倒した分だけ強く揺らす
 		swing = clampf(swing + Input.get_action_strength("pad_right") - Input.get_action_strength("pad_left"), -1.0, 1.0)
 		var dash := false   # 全力登りは廃止
+		# スタート（リトライ）に使ったボタンを押したままだと、すぐ叫んでしまう。一度離すまで叫びは受け付けない
+		var held := Input.is_action_pressed("ui_accept") or Input.is_action_pressed("pad_shout") or Input.is_key_pressed(KEY_ENTER)
+		if not shout_armed:
+			if held:
+				shout = false
+			else:
+				shout_armed = true
 		if autopilot:
 			climb = bot_climb
 			shout = bot_shout
@@ -1351,23 +1360,13 @@ func _tip(key: String, kb: String, pad_txt := "") -> void:
 
 func _update_tips(delta: float) -> void:
 	# 場面ごとの案内。一度出たら、そのセッションでは出さない
+	# 案内は3つだけ: 登る・揺らしてよける / 罪人が踏み台になる / 叫んで跳ぶ（あとは遊べばわかる）
 	if model.elapsed < 4.0 and model.height < 3.0:
-		_tip("climb", "W / ↑ で登る　A / D で糸を揺らす", "左スティックで登る・揺らす")
+		_tip("climb", "W / ↑ で登る　A / D で糸を揺らしてよけろ", "左スティックで登る・揺らしてよけろ")
 	if not model.incoming_sinners().is_empty():
 		_tip("sinner", "罪人が飛びつく。つかまらせれば踏み台になる")
 	if model.can_shout():
 		_tip("shout", "SPACEで叫べ！ 踏み台を蹴って跳ぶ", "×で叫べ！ 踏み台を蹴って跳ぶ")
-	if model.stepping_stones() >= 2:
-		_tip("hoard", "溜めるほど高く跳ぶ。ただし重いと糸が切れる")
-	for rk in model.rocks:
-		if rk.state == 0 and _sy(rk.h) > 0.0:
-			_tip("oni", "鬼が岩を投げる。赤い点線をよけろ（止まるのも手）")
-	for o in model.obstacles:
-		var dh: float = model.fire_pos(o).y - model.height
-		if dh > 0.0 and dh < 14.0:
-			_tip("fire", "鬼火は糸を揺らしてかわせ")
-	if model.height - model.lava_h < 35.0 and model.elapsed > 3.0:
-		_tip("lava", "下から業火が迫る！ 溜めて大きく跳べ")
 	if model.is_clutch() and model.can_shout():
 		pass   # 九死に一生は文字では案内しない（演出で見せる）
 	if tip_text != "":
