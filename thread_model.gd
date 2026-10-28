@@ -168,6 +168,11 @@ func setup(c: Dictionary, seed_value: int, difficulty := 1) -> void:
 	_generate(seed_value)
 
 
+func late(h: float) -> float:
+	# 後半（500m〜1000m）の追い込み 0〜1
+	return clampf((h - GOAL * 0.5) / (GOAL * 0.5), 0.0, 1.0)
+
+
 func ramp(h: float) -> float:
 	# 高さに応じた難しさ 0〜1
 	return clampf(h / DIFF_RAMP, 0.0, 1.0)
@@ -196,14 +201,14 @@ func _generate_ahead() -> void:
 			lane = rng.randi_range(0, 2)
 		gen_last_lane = lane
 		obstacles.append({"type": "fire", "h": gen_fire_h, "cx": FIRE_LANES[lane], "lane": lane,
-				"r": FIRE_ORBIT, "w": rng.randf_range(1.6, 2.4) * (1.0 if rng.randf() < 0.5 else -1.0),
+				"r": FIRE_ORBIT, "w": rng.randf_range(1.6, 2.4) * (1.0 if rng.randf() < 0.5 else -1.0) * lerpf(1.0, 1.4, late(gen_fire_h)),   # 後半の鬼火は速く回る
 				"phase": rng.randf() * TAU})
 		# 上ほど間隔が詰まる。後半（500m〜）はさらにもう一段詰めて、鬼火を増やす
-		var late := clampf((gen_fire_h - GOAL * 0.5) / (GOAL * 0.5), 0.0, 1.0)
-		gen_fire_h += cfg.fire_gap * lerpf(1.3, 0.65, ramp(gen_fire_h)) * lerpf(1.0, 0.7, late) * rng.randf_range(0.7, 1.3)
+		var lt := late(gen_fire_h)
+		gen_fire_h += cfg.fire_gap * lerpf(1.3, 0.65, ramp(gen_fire_h)) * lerpf(1.0, 0.7, lt) * rng.randf_range(0.7, 1.3)
 	while gen_perch_h < minf(height + GEN_AHEAD, GOAL - 12.0):
 		var n := 1
-		if rng.randf() < 0.25 + 0.2 * ramp(gen_perch_h):   # ときどき2人組（上ほど多い）
+		if rng.randf() < 0.25 + 0.2 * ramp(gen_perch_h) + 0.2 * late(gen_perch_h):   # ときどき2人組（上ほど多い）
 			n += 1
 		perches.append({"h": gen_perch_h, "side": -1.0 if rng.randf() < 0.5 else 1.0, "n": n, "fired": 0, "timer": 0.0})
 		gen_perch_h += lerpf(cfg.sinner_gap_low, cfg.sinner_gap_high, ramp(gen_perch_h)) * rng.randf_range(0.75, 1.25)
@@ -414,7 +419,7 @@ func _update_rocks(delta: float) -> void:
 		rock_timer = maxf(rock_timer, 0.7)
 	rock_timer -= delta
 	if rock_timer <= 0.0 and state == State.CLIMBING and height < GOAL - 30.0:
-		rock_timer = cfg.rock_interval * lerpf(1.3, 0.6, ramp(height)) * rng.randf_range(0.6, 1.4)
+		rock_timer = cfg.rock_interval * lerpf(1.3, 0.6, ramp(height)) * lerpf(1.0, 0.65, late(height)) * rng.randf_range(0.6, 1.4)   # 後半は鬼がさらに頻繁に投げる
 		var lead: float = cfg.climb_speed * (ONI_WINDUP + cfg.rock_flight) if rng.randf() < 0.5 else 0.0
 		var ax: float = x + rng.randf_range(-30.0, 30.0) if rng.randf() < 0.6 else rng.randf_range(-X_LIMIT * 0.7, X_LIMIT * 0.7)
 		var r0 := {"side": -1.0 if rng.randf() < 0.5 else 1.0, "state": 0, "t": 0.0,
