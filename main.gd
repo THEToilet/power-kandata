@@ -568,12 +568,13 @@ const SND_LOOP := ["bgm_title", "bgm_play", "bgm_heaven", "se_rumble"]
 # 音ごとの音量（dB）。うるさい・小さいと感じたらここをいじる
 const SND_VOL := {
 	"bgm_title": -8.0, "bgm_play": -10.0, "bgm_heaven": -9.0, "jingle_clear": -5.0, "jingle_gameover": -5.0,
-	"se_shout": -2.0, "se_shout_clutch": 0.0, "se_kick": -9.0, "se_catch": -16.0, "se_grab": -9.0,
+	"se_shout": -2.0, "se_shout_clutch": 0.0, "se_kick": -12.0, "se_catch": -16.0, "se_grab": -13.0,
 	"se_snap": -1.0, "se_fall": -7.0, "se_hit_fire": -3.0, "se_hit_rock": -4.0, "se_burn": -8.0,
-	"se_throw": -10.0, "se_warn": -11.0, "se_leap": -16.0, "se_start": -5.0, "se_tick": -12.0,
+	"se_throw": -15.0, "se_warn": -16.0, "se_leap": -22.0, "se_start": -5.0, "se_tick": -12.0,
 	"se_rank_new": -4.0, "se_nope": -10.0, "se_heart": -3.0, "se_whiff": -6.0,
 }
 var snd := {}
+const MASTER_DB := -8.0   # 全体の音量（dB）。うるさければ下げる
 var bgm_player: AudioStreamPlayer
 var rumble_player: AudioStreamPlayer
 var se_players: Array = []
@@ -584,6 +585,7 @@ var se_log := {}   # 鳴らした回数（検証用）
 
 
 func _setup_audio() -> void:
+	AudioServer.set_bus_volume_db(0, MASTER_DB)
 	for n in SND_NAMES:
 		var path: String = "res://audio/" + n + ".wav"
 		var st = null
