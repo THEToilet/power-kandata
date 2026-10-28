@@ -422,8 +422,16 @@ func _ready() -> void:
 	_setup_ripple()
 	get_window().title = "パワーカンダタ"   # 記録の保存先が変わらないよう、プロジェクト名は変えずにウィンドウの題だけ変える
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	var f := FontFile.new()
-	if f.load_dynamic_font("res://fonts/DotGothic16-Regular.ttf") == OK:
+	# 書き出し版（exe / Web）には ttf そのものは入らないので、インポート済みのフォントを読む。未インポートなら ttf を直接
+	const FONT_PATH := "res://fonts/DotGothic16-Regular.ttf"
+	var f: FontFile = null
+	if ResourceLoader.exists(FONT_PATH):
+		f = load(FONT_PATH) as FontFile
+	if f == null:
+		f = FontFile.new()
+		if f.load_dynamic_font(FONT_PATH) != OK:
+			f = null
+	if f != null:
 		f.antialiasing = TextServer.FONT_ANTIALIASING_NONE
 		f.hinting = TextServer.HINTING_NONE
 		f.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
