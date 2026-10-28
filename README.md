@@ -6,6 +6,12 @@
 しがみついてくる罪人たちを **叫んで蹴落とし、踏み台にして跳ぶ**。
 溜めるほど高く跳べるけれど、大勢ぶら下がるほど糸は傷んで切れやすくなる……というチキンレースです。
 
+<p align="center">
+  <a href="https://thetoilet.github.io/power-kandata/"><img src="docs/promo.gif" width="640" alt="パワーカンダタのプレイ映像"></a>
+  <br>
+  🎬 <a href="https://thetoilet.github.io/power-kandata/promo.mp4">宣伝動画（30秒・音あり）</a>
+</p>
+
 **▶ ブラウザで遊ぶ: https://thetoilet.github.io/power-kandata/**
 
 - PC のブラウザ向けです（キーボードかゲームパッド）。スマホのタッチ操作には対応していません。
