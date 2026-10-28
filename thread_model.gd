@@ -130,8 +130,6 @@ var air_left := 0.0
 var air_from := 0.0
 var air_to := 0.0
 var stun_left := 0.0
-var dashing := false          # 全力登り中
-var dash_time := 0.0          # 全力登りした合計秒数
 var invuln_left := 0.0
 var hits := 0                 # 鬼火に当たった回数
 var rock_hits := 0            # 落石に当たった回数
@@ -269,13 +267,13 @@ func can_shout() -> bool:
 	return state == State.CLIMBING and stepping_stones() >= 1
 
 
-func drain_rate(climbing: bool, _dash := false) -> float:
+func drain_rate(climbing: bool) -> float:
 	# 罪人ぶんを除いた耐久度の減り（/秒）。カンダタ一人なら糸は切れない（原作どおり）。
 	# 罪人がしがみついた状態で登ると、そのぶん糸がこすれて傷む
 	return cfg.climb_wear if climbing and ghosts >= 1.0 else 0.0
 
 
-func time_to_snap(climbing := true, _dash := false) -> float:
+func time_to_snap(climbing := true) -> float:
 	# 今のまま続けたら何秒で耐久度が 0 になるか
 	# 罪人は勝手には増えないので、今の減り方が続くとして計算する
 	var a: float = drain_rate(climbing) + ghost_drain()
@@ -284,7 +282,7 @@ func time_to_snap(climbing := true, _dash := false) -> float:
 	return durability / maxf(a, 0.01)
 
 
-func step(delta: float, want_climb: bool, want_shout: bool, swing: float, want_dash := false) -> void:
+func step(delta: float, want_climb: bool, want_shout: bool, swing: float) -> void:
 	if state != State.CLIMBING and state != State.AIR:
 		return
 	elapsed += delta
@@ -348,7 +346,6 @@ func step(delta: float, want_climb: bool, want_shout: bool, swing: float, want_d
 		return
 
 	var climbing := want_climb and stun_left <= 0.0
-	dashing = false   # 全力登りは廃止
 	var speed := 1.0 if climbing else 0.0
 	height += cfg.climb_speed * speed / (1.0 + cfg.ghost_slow * ghosts) * delta   # しがみつかれるほど重い
 	durability -= (drain_rate(climbing) + ghost_drain()) * delta
@@ -393,7 +390,7 @@ func _in_blast(px: float, ph: float) -> bool:
 
 func _update_window() -> void:
 	# 切れるまで残り shout_window 秒（普通に登った場合）を切ったら、叫べる窓が開く。一度開いたら閉じない
-	if state == State.CLIMBING and not window_open and time_to_snap(true, false) < cfg.shout_window:
+	if state == State.CLIMBING and not window_open and time_to_snap(true) < cfg.shout_window:
 		window_open = true
 
 

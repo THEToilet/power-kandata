@@ -4,5 +4,7 @@
 # 一時ファイル
 *.tmp
 *.log
-# 書き出した Web 版・exe（ソースではないので履歴に入れない）
+# 書き出した exe など（ソースではないので履歴に入れない）
 build/
+# 各自のPCでの Godot の場所（run_game.bat / open_editor.bat が読む）
+godot_path.txt

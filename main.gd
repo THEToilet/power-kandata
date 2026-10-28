@@ -338,7 +338,6 @@ var model: ThreadModel = ThreadModel.new()
 var tuning: Dictionary = ThreadModel.DEFAULTS.duplicate()
 var course := 1
 var difficulty := 2              # 難易度は「むずかしい」だけ（選択はなくした。記録・ランキングもこの枠を使う）
-const DIFF_PATH := "user://difficulty.txt"
 const BEST_PATH := "user://records_v3.txt"   # 難易度ごとの最高到達（m）と、最速クリア（秒）
 var best := [0, 0, 0]              # 最高到達 m
 var best_time := [0.0, 0.0, 0.0]   # 最速クリア 秒（0 = まだクリアしていない）
@@ -363,7 +362,6 @@ var slowmo := 0.0                # スローモーションの残り（九死に
 var invert_t := 0.0              # 白黒反転の残り（九死に一生の瞬間）
 var invert_rect: ColorRect
 var base_xf := Transform2D.IDENTITY   # 世界を描くときの変形（揺れ＋叫びのズーム）
-var blast_style := 5            # 叫びの衝撃波の見せ方 0=円 1=ギザギザ吹き出し 2=空間のゆがみ 3=砕けた音波 4=火の粉の輪 5=吹き出し＋ゆがみ
 var ripple_rect: ColorRect
 var shout_hold := 0.0            # 叫んだ直後にカメラを留める残り時間
 var hitstop := 0.0               # ヒットストップの残り時間（秒）
@@ -413,7 +411,6 @@ var autopilot := false
 var bot_climb := false
 var bot_shout := false
 var bot_swing := 0.0
-var bot_dash := false
 
 
 func _ready() -> void:
@@ -446,8 +443,6 @@ func _ready() -> void:
 	_setup_pad()
 	if DEV_TOOLS:
 		_load_tuning()   # 公開版では保存した調整値を読まない（誰が遊んでも同じバランス）
-	if FileAccess.file_exists(DIFF_PATH):
-		pass   # 以前の難易度選択の保存は使わない
 	if FileAccess.file_exists(BEST_PATH):
 		var parts2 := FileAccess.get_file_as_string(BEST_PATH).split(",")
 		for k in range(mini(parts2.size(), 6)):
@@ -496,7 +491,7 @@ void fragment() {
 func _update_ripple() -> void:
 	if ripple_rect == null:
 		return
-	var on := (blast_style == 2 or blast_style == 5) and stomp_fx > 0.0 and phase == Phase.PLAY
+	var on := stomp_fx > 0.0 and phase == Phase.PLAY
 	ripple_rect.visible = on
 	if not on:
 		return
@@ -563,7 +558,7 @@ func _restart() -> void:
 const SND_NAMES := ["bgm_title", "bgm_play", "bgm_heaven", "jingle_clear", "jingle_gameover",
 		"se_shout", "se_shout_clutch", "se_kick", "se_catch", "se_grab", "se_snap", "se_fall",
 		"se_hit_fire", "se_hit_rock", "se_burn", "se_throw", "se_warn", "se_leap", "se_start",
-		"se_tick", "se_rank_new", "se_nope", "se_heart", "se_rumble", "se_whiff"]
+		"se_tick", "se_rank_new", "se_heart", "se_rumble", "se_whiff"]
 const SND_LOOP := ["bgm_title", "bgm_play", "bgm_heaven", "se_rumble"]
 # 音ごとの音量（dB）。うるさい・小さいと感じたらここをいじる
 const SND_VOL := {
@@ -571,7 +566,7 @@ const SND_VOL := {
 	"se_shout": -2.0, "se_shout_clutch": 0.0, "se_kick": -12.0, "se_catch": -16.0, "se_grab": -13.0,
 	"se_snap": -1.0, "se_fall": -7.0, "se_hit_fire": -3.0, "se_hit_rock": -4.0, "se_burn": -8.0,
 	"se_throw": -15.0, "se_warn": -16.0, "se_leap": -22.0, "se_start": -5.0, "se_tick": -12.0,
-	"se_rank_new": -4.0, "se_nope": -10.0, "se_heart": -3.0, "se_whiff": -6.0,
+	"se_rank_new": -4.0, "se_heart": -3.0, "se_whiff": -6.0,
 }
 var snd := {}
 const MASTER_DB := -8.0   # 全体の音量（dB）。うるさければ下げる
@@ -730,7 +725,6 @@ func _setup_pad() -> void:
 		"pad_up": [[JOY_AXIS_LEFT_Y, -1.0], [JOY_AXIS_TRIGGER_RIGHT, 1.0], JOY_BUTTON_DPAD_UP],
 		"pad_left": [[JOY_AXIS_LEFT_X, -1.0], JOY_BUTTON_DPAD_LEFT],
 		"pad_right": [[JOY_AXIS_LEFT_X, 1.0], JOY_BUTTON_DPAD_RIGHT],
-		"pad_dash": [[JOY_AXIS_TRIGGER_LEFT, 1.0], JOY_BUTTON_LEFT_SHOULDER, JOY_BUTTON_RIGHT_SHOULDER],
 		"pad_shout": [JOY_BUTTON_A, JOY_BUTTON_B],
 	}
 	for name in defs:
@@ -898,7 +892,6 @@ func _process(delta: float) -> void:
 			swing += 1.0
 		# 左スティックは倒した分だけ強く揺らす
 		swing = clampf(swing + Input.get_action_strength("pad_right") - Input.get_action_strength("pad_left"), -1.0, 1.0)
-		var dash := false   # 全力登りは廃止
 		# スタート（リトライ）に使ったボタンを押したままだと、すぐ叫んでしまう。一度離すまで叫びは受け付けない
 		var held := Input.is_action_pressed("ui_accept") or Input.is_action_pressed("pad_shout") or Input.is_key_pressed(KEY_ENTER)
 		if not shout_armed:
@@ -910,7 +903,6 @@ func _process(delta: float) -> void:
 			climb = bot_climb
 			shout = bot_shout
 			swing = bot_swing
-			dash = bot_dash
 			bot_shout = false
 		early_t = maxf(0.0, early_t - delta)
 		if shout and model.state == ThreadModel.State.CLIMBING and not model.can_shout() and early_t <= 0.0:
@@ -926,7 +918,7 @@ func _process(delta: float) -> void:
 		var ghosts_before := int(model.ghosts)
 		var x_before := model.x
 		var h_before := model.height
-		model.step(delta, climb, shout, swing, dash)
+		model.step(delta, climb, shout, swing)
 		if model.shouts > shouts_before:
 			_on_shout(ghosts_before, x_before)
 		if prev_state == ThreadModel.State.AIR and model.state == ThreadModel.State.CLIMBING:
@@ -1096,11 +1088,6 @@ func _on_shout(n_ghosts: int, from_x: float) -> void:
 	shake = minf(1.8, 0.8 + 0.14 * model.last_stones)   # 大勢を踏み台にするほど揺れる
 	shout_age = 0.0
 	shout_clutch = model.last_clutch
-	if blast_style == 4:   # 火の粉の輪: ちょうど衝撃波の範囲まで飛んで消える
-		for k in range(56):
-			var ang := TAU * k / 56.0
-			var spd := model.blast_r / 0.45
-			_part(sp, Vector2(cos(ang), sin(ang)) * spd, 0.45, [C_YELLOW, C_ORANGE, C_WHITE][k % 3], 2.0, 0.0, 0.0)
 	# 糸が切れる瞬間: 足もとの切り口に火花
 	_burst(sp + Vector2(0, 18), 18, [C_WHITE, C_YELLOW, C_ORANGE], 110.0, 2.0, 0.45, 120.0)
 	if model.last_stones >= 5:
@@ -1128,57 +1115,32 @@ func _on_shout(n_ghosts: int, from_x: float) -> void:
 func _draw_blast() -> void:
 	var bc := Vector2(_sx(blast_at.x), _sy(blast_at.y))
 	var bk := 1.0 - stomp_fx / BLAST_TIME              # 0→1
-	var grow := 1.0 - pow(1.0 - minf(bk / 0.45, 1.0), 3.0)
-	var rr2 := roundf(blast_px * grow)
-	var fade := 1.0 - maxf(bk - 0.45, 0.0) / 0.55
-	var accent: Color = C_GOLD if shout_clutch else C_YELLOW
-	match blast_style:
-		0:   # 円（元の見せ方）
-			draw_circle(bc, rr2, Color(C_WHITE, 0.18 * fade))
-			draw_arc(bc, rr2, 0, TAU, 48, Color(accent, fade), 3.0)
-			draw_arc(bc, maxf(rr2 - 6.0, 0.0), 0, TAU, 48, Color(C_WHITE, 0.6 * fade), 1.0)
-		1, 5:   # 漫画のギザギザ吹き出し（大きさ＝範囲）。ポンと出て、すっと縮んで消える
-			var pop := clampf(bk / 0.12, 0.0, 1.0)
-			var shrink := clampf((bk - 0.55) / 0.45, 0.0, 1.0)
-			var rad := blast_px * 0.62 * (0.6 + 0.4 * (1.0 - pow(1.0 - pop, 3.0))) * (1.0 - 0.5 * shrink)
-			if rad > 4.0:
-				var n := 10
-				var rng := RandomNumberGenerator.new()
-				rng.seed = 7 + int(blast_at.y)
-				var outer := PackedVector2Array()
-				var inner := PackedVector2Array()
-				for i in range(n * 2):
-					var ang := TAU * i / (n * 2) + 0.1
-					var r := rad * (1.0 if i % 2 == 0 else 0.62) * (0.85 + rng.randf() * 0.3)
-					outer.append(bc + Vector2(cos(ang), sin(ang)) * (r + 4.0))
-					inner.append(bc + Vector2(cos(ang), sin(ang)) * r)
-				var a := 1.0 - shrink
-				var glow := PackedVector2Array()
-				for v in outer:
-					glow.append(bc + (v - bc) * 1.12)
-				draw_colored_polygon(glow, Color(C_ORANGE, a * 0.35))      # 外側のぼんやりした光
-				draw_colored_polygon(outer, Color(C_GOLD if shout_clutch else C_ORANGE, a * 0.9))   # 縁は黒でなく橙
-				draw_colored_polygon(inner, Color(C_GOLD if shout_clutch else Color8(255, 246, 220), a))
-				var inner2 := PackedVector2Array()
-				for v in inner:
-					inner2.append(bc + (v - bc) * 0.72)
-				draw_colored_polygon(inner2, Color(C_ORANGE if shout_clutch else C_RED, a * 0.9))
-		2:   # 空間のゆがみだけ（描画はシェーダー）
-			pass
-		3:   # 砕けた音波: 太い弧が途切れ途切れに外へ
-			for w in range(3):
-				var rw := blast_px * clampf(grow * 1.15 - w * 0.18, 0.0, 1.0)
-				if rw < 8.0:
-					continue
-				var seg := 0
-				var ang := w * 0.4
-				while ang < TAU + w * 0.4:
-					var len := 0.32 + 0.12 * float((seg * 7 + w) % 3)
-					draw_arc(bc, rw, ang, ang + len, 6, Color(accent if w == 0 else C_WHITE, fade * (1.0 - w * 0.25)), 4.0 - w)
-					ang += len + 0.18
-					seg += 1
-		4:   # 輪は描かない: 外へ吹き飛ぶ火の粉で範囲を見せる（粒は叫んだ瞬間に出す）
-			pass
+	# 漫画のギザギザ吹き出し（大きさ＝範囲）。ポンと出て、すっと縮んで消える。まわりの空間のゆがみはシェーダー
+	var pop := clampf(bk / 0.12, 0.0, 1.0)
+	var shrink := clampf((bk - 0.55) / 0.45, 0.0, 1.0)
+	var rad := blast_px * 0.62 * (0.6 + 0.4 * (1.0 - pow(1.0 - pop, 3.0))) * (1.0 - 0.5 * shrink)
+	if rad > 4.0:
+		var n := 10
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 7 + int(blast_at.y)
+		var outer := PackedVector2Array()
+		var inner := PackedVector2Array()
+		for i in range(n * 2):
+			var ang := TAU * i / (n * 2) + 0.1
+			var r := rad * (1.0 if i % 2 == 0 else 0.62) * (0.85 + rng.randf() * 0.3)
+			outer.append(bc + Vector2(cos(ang), sin(ang)) * (r + 4.0))
+			inner.append(bc + Vector2(cos(ang), sin(ang)) * r)
+		var a := 1.0 - shrink
+		var glow := PackedVector2Array()
+		for v in outer:
+			glow.append(bc + (v - bc) * 1.12)
+		draw_colored_polygon(glow, Color(C_ORANGE, a * 0.35))      # 外側のぼんやりした光
+		draw_colored_polygon(outer, Color(C_GOLD if shout_clutch else C_ORANGE, a * 0.9))   # 縁は黒でなく橙
+		draw_colored_polygon(inner, Color(C_GOLD if shout_clutch else Color8(255, 246, 220), a))
+		var inner2 := PackedVector2Array()
+		for v in inner:
+			inner2.append(bc + (v - bc) * 0.72)
+		draw_colored_polygon(inner2, Color(C_ORANGE if shout_clutch else C_RED, a * 0.9))
 
 
 func _draw_speed_lines(c: Vector2) -> void:
@@ -1301,7 +1263,7 @@ func _update_particles(delta: float) -> void:
 			var ca := randf() * TAU
 			_part(Vector2(px, py) + Vector2(cos(ca), sin(ca)) * 18.0, Vector2(cos(ca), sin(ca)) * 30.0, 0.35, C_GOLD, 2.0)
 		# 糸がほつれる: 切れそうになると、頭上の糸から繊維が飛ぶ
-		var snap := model.time_to_snap(true, model.dashing)
+		var snap := model.time_to_snap(true)
 		if snap < 2.5 and randf() < (0.9 if snap < 1.2 else 0.4):
 			_part(Vector2(px + randf_range(-2, 2), py - 20.0 - randf() * 20.0), Vector2(randf_range(-40, 40), randf_range(-20, 20)),
 					0.6, Color(C_WHITE, 0.8), 1.0, 40.0, 1.0)
@@ -1393,7 +1355,7 @@ func _hint() -> Array:
 		return ["ちぎれた！ 上の糸をつかめ！", C_YELLOW]
 	if model.stun_left > 0.0:
 		return ["よろけて登れない…", C_ORANGE]
-	var snap := model.time_to_snap(true, model.dashing)
+	var snap := model.time_to_snap(true)
 	if model.is_clutch() and model.can_shout():
 		return ["", C_GOLD]
 	if snap < 1.5:
@@ -1664,7 +1626,7 @@ func _draw_world() -> void:
 		tc = C_GOLD   # 九死に一生のあと、糸が金に光る
 	if model.state == ThreadModel.State.CLIMBING:
 		tc = C_SILK.lerp(C_RED, (1.0 - model.durability / ThreadModel.DURABILITY_MAX) * 0.7)
-		if model.time_to_snap(true, false) < 1.3 and fmod(t, 0.3) < 0.15:
+		if model.time_to_snap(true) < 1.3 and fmod(t, 0.3) < 0.15:
 			tc = C_RED
 	if model.state == ThreadModel.State.TORN:
 		# 切れた上の糸: 切り口が跳ね上がり、しなりながら天へ引き上げられていく
@@ -1684,7 +1646,7 @@ func _draw_world() -> void:
 
 	# 糸（下側）と罪人と、糸の耐久度の○ゲージ
 	if model.state == ThreadModel.State.CLIMBING:
-		var snap := model.time_to_snap(true, model.dashing)
+		var snap := model.time_to_snap(true)
 		# 下に余っている糸は、切った所（下端）まで。登るほど伸びていく
 		var end_y := minf(_sy(model.thread_end) - 15.0, H + 20.0)
 		end_y = minf(end_y, _sy(0.0) + 16.0)   # 糸は地面より下には垂れない（スタート地点で地面に届いて止まる）
@@ -1727,7 +1689,7 @@ func _draw_world() -> void:
 		_draw_frayed_thread(hand, top_pt)
 		_draw_ring(ring_c, snap)
 
-	# 叫びの衝撃波（見せ方は blast_style で切り替え）
+	# 叫びの衝撃波
 	if stomp_fx > 0.0:
 		_draw_blast()
 

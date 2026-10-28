@@ -56,14 +56,6 @@ static func want_climb(m) -> bool:
 	return true
 
 
-static func inp_dash(m, margin: float, mode: String) -> bool:
-	if mode == "dash":
-		return true
-	if mode == "smartdash":
-		return m.time_to_snap(true, true) > margin + 1.5
-	return false
-
-
 static func bot_inputs(m, margin: float, mode: String, smode := "swing", cap := 99) -> Array:
 	var swing := clampf((target_x(m, smode, cap) - m.x) * 0.05 - m.vx * 0.01, -1.0, 1.0)
 	if mode == "noswing":
@@ -81,10 +73,7 @@ static func bot_inputs(m, margin: float, mode: String, smode := "swing", cap := 
 			shout = true
 		elif mode.begins_with("n") and m.can_shout() and m.stepping_stones() >= int(mode.substr(1)):
 			shout = true   # n3 = 3人集まったら叫ぶ（糸が危なければその前でも）
-	var dash := mode.ends_with("dash")
-	if mode == "smartdash":  # 糸に余裕があるうちだけ全力
-		dash = m.time_to_snap(true, true) > margin + 1.5
-	return [want_climb(m), shout, swing, dash]
+	return [want_climb(m), shout, swing]
 
 
 func run_one(seed_value: int, margin: float, mode: String, cfg := {}, smode := "greedy", diff := 1):
@@ -92,7 +81,7 @@ func run_one(seed_value: int, margin: float, mode: String, cfg := {}, smode := "
 	m.setup(cfg, seed_value, diff)
 	while (m.state == ThreadModel.State.CLIMBING or m.state == ThreadModel.State.AIR) and m.elapsed < 240.0:
 		var inp := bot_inputs(m, margin, mode, smode, 30)
-		m.step(1.0 / 60.0, inp[0], inp[1], inp[2], inp[3])
+		m.step(1.0 / 60.0, inp[0], inp[1], inp[2])
 	return m
 
 
@@ -128,7 +117,7 @@ func summary(label: String, margin: float, mode: String, cfg := {}, smode := "gr
 
 func _init() -> void:
 	# エンドレス: どこまで登れたか（avg_height）で比べる
-	for d in [0, 1, 2]:
+	for d in [2]:   # 遊べるのは「むずかしい」だけ
 		print("== ", ThreadModel.DIFFICULTY_NAMES[d])
 		for md in ["n1", "n2", "n3", "n5", "clutch"]:
 			summary("%s smart" % md, 1.0, md, {}, "smart", d)

@@ -1,3 +1,7 @@
 @echo off
-rem 蜘蛛の糸プロトタイプを直接起動する
-"C:\path\to\godot-4.6.3\Godot_v4.6.3-stable_win64.exe" --path "%~dp0."
+rem Run Power Kandata directly.
+rem Put the full path to your Godot 4.6.3 executable in godot_path.txt (one line, not committed to git).
+rem If that file does not exist, "godot" on PATH is used.
+set "GODOT=godot"
+if exist "%~dp0godot_path.txt" set /p GODOT=<"%~dp0godot_path.txt"
+"%GODOT%" --path "%~dp0."

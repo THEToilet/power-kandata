@@ -12,7 +12,6 @@ var course := 1
 var margin := 1.0
 var want_panel := false
 var shots := {}
-var quick := false
 var pend_key := ""
 var pend_lv := 0.0
 var pend_n := 0
@@ -27,17 +26,10 @@ func _ready() -> void:
 	if args.size() > 2:
 		margin = float(args[2])
 	want_panel = args.size() > 3 and args[3] == "panel"
-	var wave := args.has("wave")
 	DirAccess.make_dir_recursive_absolute(outdir)
 	main = load("res://main.tscn").instantiate()
 	add_child(main)
 	main.autopilot = true
-	if wave:
-		main.tuning["fire_mode"] = 1.0
-	for a in args:   # style=N で叫びの見せ方を切り替えて撮る
-		if a.begins_with("style="):
-			main.blast_style = int(a.substr(6))
-			quick = true
 
 
 func _snap(n: String) -> void:
@@ -93,7 +85,7 @@ func _process(_d: float) -> void:
 		var inp: Array = Bot.bot_inputs(m, margin, "n2", "smart", 30)
 		if OS.get_cmdline_user_args().has("snap") and m.durability <= 0.0: inp[1] = false
 		if OS.get_cmdline_user_args().has("idle") and m.elapsed < 9.0:   # 出だしで止まって、マグマの上がり方を見る
-			inp = [false, false, 0.0, false]
+			inp = [false, false, 0.0]
 		if OS.get_cmdline_user_args().has("nope") and m.ghosts < 1.0 and m.elapsed > 0.8 and m.state == ThreadModel.State.CLIMBING and not shots.has("nope_go"):
 			shots["nope_go"] = true
 			main.ring_nope = main.NOPE_TIME   # 踏み台なしで叫んだときの見た目だけを出す
@@ -106,7 +98,6 @@ func _process(_d: float) -> void:
 		main.bot_climb = inp[0]
 		main.bot_shout = inp[1] and pend_key == ""
 		main.bot_swing = inp[2]
-		main.bot_dash = inp[3]
 		if m.height > 280.0 and not shots.has("goal"):
 			shots["goal"] = true
 			_snap("goal")
@@ -135,9 +126,6 @@ func _process(_d: float) -> void:
 		if m.shouts > 0 and m.last_clutch and m.state == ThreadModel.State.AIR and not shots.has("clutch_jump"):
 			shots["clutch_jump"] = true
 			_snap("clutch_jump")
-		if m.dashing and m.elapsed > 1.0 and not shots.has("dash"):
-			shots["dash"] = true
-			_snap("dash")
 		if m.state == ThreadModel.State.AIR and m.air_to - m.air_from > 40.0:
 			var kk: float = 1.0 - m.air_left / ThreadModel.AIR_TIME
 			for nm in ["bigjump_a", "bigjump_b", "bigjump_c"]:
@@ -175,16 +163,6 @@ func _process(_d: float) -> void:
 		if main.fx_shout > 0.0 and main.fx_shout < 0.4 and m.elapsed > 4.0 and not shots.has("shout_late"):
 			shots["shout_late"] = true
 			_snap("shout_late")
-		if quick and main.shout_age > 0.06 and main.shout_age < 0.09 and m.elapsed > 4.0 and not shots.has("cmp_a"):
-			shots["cmp_a"] = true
-			_snap("cmp_a")
-		if quick and main.shout_age > 0.20 and main.shout_age < 0.23 and shots.has("cmp_a") and not shots.has("cmp_b"):
-			shots["cmp_b"] = true
-			_snap("cmp_b")
-		if quick and main.shout_age > 0.34 and main.shout_age < 0.37 and shots.has("cmp_b") and not shots.has("cmp_c"):
-			shots["cmp_c"] = true
-			_snap("cmp_c")
-			get_tree().quit()
 		if main.shout_age > 0.12 and main.shout_age < 0.16 and m.elapsed > 4.0 and not shots.has("punch"):
 			shots["punch"] = true
 			_snap("punch")

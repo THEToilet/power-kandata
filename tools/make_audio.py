@@ -436,12 +436,6 @@ def se_rank_new():
     return tr.render(loop=False)
 
 
-def se_nope():
-    t = tl(0.2)
-    x = square(110, t, 0.5) * ((t < 0.07) | ((t > 0.11) & (t < 0.18)))
-    return lp(x, 1500) * 0.4
-
-
 def se_heart():
     t = tl(0.2)
     return sine(55 * (1 + 0.5 * np.exp(-t * 30)), t) * decay(len(t), 0.06)
@@ -493,7 +487,6 @@ if __name__ == "__main__":
     save("se_start", se_start(), 0.7)
     save("se_tick", se_tick(), 0.4)
     save("se_rank_new", se_rank_new(), 0.7)
-    save("se_nope", se_nope(), 0.45)
     save("se_heart", se_heart(), 0.8)
     save("se_rumble", se_rumble(), 0.8)
     save("se_whiff", se_whiff(), 0.5)   # 追加分は最後に（乱数の順番を変えず、既存の音を作り直しても同じになるように）
