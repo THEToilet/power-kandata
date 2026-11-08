@@ -8,3 +8,6 @@
 build/
 # 各自のPCでの Godot の場所（run_game.bat / open_editor.bat が読む）
 godot_path.txt
+
+# Claude Code の個人設定（承認済みコマンド等が保存されるためコミットしない）
+.claude/settings.local.json
